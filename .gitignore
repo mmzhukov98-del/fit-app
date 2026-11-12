@@ -1,0 +1,6 @@
+# Личные данные — никогда не публикуются
+personal/
+reports/
+*.backup.json
+фитнес-копия-*.json
+.claude/
