@@ -44,6 +44,7 @@ export function defaultState() {
       reminders: { workout: true, weigh: true, measure: true, food: false, recovery: true, backup: true },
       lastBackup: null,
       cardioCleared: false,
+      cookForTwo: true,
       planVersionSeen: PLAN_VERSION,
       planVersionAccepted: PLAN_VERSION
     },
@@ -190,6 +191,7 @@ export function validateData(d) {
   for (const [dt, v] of Object.entries(d.daily)) if (!DATE.test(dt) || !isObj(v)) return 'Дневник дня повреждён';
   for (const [dt, v] of Object.entries(d.food)) {
     if (!DATE.test(dt) || !isObj(v) || (v.slots && !isObj(v.slots))) return 'Дневник питания повреждён';
+    if (v.extras && (!Array.isArray(v.extras) || v.extras.some(x => !isObj(x)))) return 'Записи «сверх плана» повреждены';
     for (const arr of Object.values(v.slots || {})) { if (!Array.isArray(arr)) return 'Дневник питания повреждён'; for (const e of arr) if (!isObj(e) || !Array.isArray(e.items)) return 'Записи питания повреждены'; }
   }
   for (const m of d.measurements) if (!isObj(m) || typeof m.date !== 'string' || !DATE.test(m.date)) return 'Замеры повреждены';

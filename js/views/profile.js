@@ -1,9 +1,11 @@
 // Профиль: показатели, нагрузка, недельный отчёт, цели, напоминания, данные, обновления плана.
 import * as store from '../store.js';
+import { g } from '../gender.js';
 import { icon, esc, lineChart, barChart, bar, toast, confirmDialog, openSheet, downloadFile, copyText, sw, alertDialog } from '../ui.js';
 import { today, fmtDate, fmtShort, addDays, mondayOf, weekDates, WD_SHORT, WD_LONG, parse, weightEntries, weeklyWeightSeries, weekAvgWeight, lastMeasurement,
-  measurementBefore, rangeLoad, dayLoad, weekReport, claudeReport, buildICS, csvExports, fmt, r1, plural, programInfo, diffDays, cycleInfo, ACT_TYPES } from '../logic.js';
+  measurementBefore, rangeLoad, dayLoad, weekReport, claudeReport, EXTRA_CATS, buildICS, csvExports, fmt, r1, plural, programInfo, diffDays, cycleInfo, ACT_TYPES } from '../logic.js';
 import { PLAN_VERSION, CHANGELOG } from '../data/plan-meta.js';
+import { TOTAL_WEEKS } from '../data/program.js';
 import { weighSheet, measureSheet, dailySheet, activitySheet } from './sheets.js';
 import { go } from '../app.js';
 import { myCard, shareText, decodeCard, compare, monthProgress, SCORE_RULES, duelScore, partnerWeek, partnerWeeks } from '../duel.js';
@@ -37,14 +39,14 @@ function ProfileHome() {
   const html = `
   <div class="page">
     <div class="card row" style="gap:14px">
-      <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,var(--tint),var(--purple));display:grid;place-items:center;color:#fff;font-size:26px;font-weight:700;flex:none">${esc((p.name || 'Я')[0].toUpperCase())}</div>
+      ${avatarSVG(s.settings.who, 60)}
       <div class="grow"><div style="font-weight:600;font-size:20px">${esc(p.name || 'Мой профиль')}</div><div class="muted small">${p.age} лет · ${p.height} см · ${esc(p.level)}</div></div>
       <button class="btn tiny gray" data-go="profile/edit">Изменить</button>
     </div>
     <div class="grid3">
       <div class="card" style="padding:12px"><div class="xs muted">Вес (ср.)</div><div class="mid-num">${curW ? fmt(curW.avg, 1) : '—'}</div><div class="xs muted">старт ${p.startWeight}</div></div>
-      <div class="card" style="padding:12px"><div class="xs muted">Талия</div><div class="mid-num">${lm && lm.waist ? fmt(lm.waist, 1) : '—'}</div><div class="xs ${lm && first && lm.waist < first.waist ? 'ok' : 'muted'}">${lm && first && first !== lm && lm.waist ? `${lm.waist - first.waist > 0 ? '+' : ''}${fmt(lm.waist - first.waist, 1)} см` : 'цель ' + p.targetWaist}</div></div>
-      <div class="card" style="padding:12px"><div class="xs muted">Тренировок</div><div class="mid-num">${s.sessions.length}</div><div class="xs muted">нед. ${Math.max(1, Math.min(pi.week, 10))}/10</div></div>
+      <div class="card" style="padding:12px"><div class="xs muted">Талия</div><div class="mid-num">${lm && lm.waist ? fmt(lm.waist, 1) : '—'}</div><div class="xs ${lm && first && lm.waist < first.waist ? 'ok' : 'muted'}">${lm && first && first !== lm && lm.waist ? `${lm.waist - first.waist > 0 ? '+' : ''}${fmt(lm.waist - first.waist, 1)} см` : (p.targetWaist ? 'цель ' + p.targetWaist : 'по желанию')}</div></div>
+      <div class="card" style="padding:12px"><div class="xs muted">Тренировок</div><div class="mid-num">${s.sessions.length}</div><div class="xs muted">нед. ${Math.max(1, Math.min(pi.week, TOTAL_WEEKS))}/${TOTAL_WEEKS}</div></div>
     </div>
 
     ${needUpdate ? `<button class="banner coach" data-go="profile/plan" style="width:100%;text-align:left"><div class="b-ic" style="background:var(--tint)">${icon('sparkle')}</div><div class="grow"><b>Есть обновление программы</b><p>Посмотри, что изменилось и почему</p></div></button>` : ''}
@@ -70,6 +72,22 @@ function ProfileHome() {
     <div class="note" style="text-align:center">Все данные хранятся только на этом устройстве. Без регистрации и передачи третьим лицам.</div>
   </div>`;
   return { title: 'Профиль', html };
+}
+
+// Аватар в стиле иконки приложения: градиент и белый линейный силуэт (мужской / женский)
+export function avatarSVG(who, size = 60) {
+  const him = who === 'him';
+  const grad = him ? ['#0a84ff', '#5e5ce6'] : ['#ff5e7e', '#b84fe0'];
+  const figure = him
+    // мужской: короткая стрижка, широкие плечи, V-силуэт
+    ? '<circle cx="32" cy="22" r="8.5"/><path d="M24.5 19.5c1-5 4.5-7 7.5-7s6.5 2 7.5 7"/><path d="M14 54c0-9 5-14 11-15.5l7 6 7-6c6 1.5 11 6.5 11 15.5"/><path d="M25 38.5 32 52l7-13.5"/>'
+    // женский: собранные волосы, плечи уже, мягкая линия
+    : '<circle cx="32" cy="23" r="8"/><path d="M24 22c0-6 3.6-9.5 8-9.5s8 3.5 8 9.5"/><circle cx="40.5" cy="13.5" r="3.6"/><path d="M17 54c0-8.5 4.5-13 10-14.5 1.5 3 3 4.5 5 4.5s3.5-1.5 5-4.5c5.5 1.5 10 6 10 14.5"/>';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-label="${him ? 'Профиль: он' : 'Профиль: она'}" role="img" style="flex:none;border-radius:50%">
+    <defs><linearGradient id="av-${who}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${grad[0]}"/><stop offset="1" stop-color="${grad[1]}"/></linearGradient></defs>
+    <circle cx="32" cy="32" r="32" fill="url(#av-${who})"/>
+    <circle cx="32" cy="32" r="27" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="2.4"/>
+    <g fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${figure}</g></svg>`;
 }
 
 /* ---------- Показатели ---------- */
@@ -232,6 +250,9 @@ function ReportView(params = {}) {
     ${r.ready.length ? `<div><div class="section-cap">Готова к прогрессии</div><div class="list">${r.ready.map(x => `<div class="li"><div class="li-main"><div class="li-title" style="font-size:15px">${esc(x.name)}</div><div class="li-sub">${esc(x.text)}</div></div></div>`).join('')}</div><div class="section-foot">Новый вес принимается в отчёте о тренировке.</div></div>` : ''}
     ${r.measNow ? `<div class="card"><div class="card-h">Замеры</div>${['waist', 'chest', 'hips'].map(k => `<div class="row between small" style="margin-top:4px"><span>${{ waist: 'Талия', chest: 'Грудь', hips: 'Бёдра' }[k]}</span><b class="num">${r.measNow[k] ?? '—'} см ${r.measPrev && r.measNow[k] && r.measPrev[k] ? `<span class="${r.measNow[k] - r.measPrev[k] < 0 ? 'ok' : 'muted'}">(${r.measNow[k] - r.measPrev[k] > 0 ? '+' : ''}${fmt(r.measNow[k] - r.measPrev[k], 1)})</span>` : ''}</b></div>`).join('')}</div>` : ''}
 
+    ${r.extras.length ? `<div class="card"><div class="card-h"><span class="ic" style="background:var(--orange)">🍕</span>Сверх плана<span class="right">${r.extras.length} за неделю</span></div>
+      <div class="chips">${Object.entries(r.extras.reduce((a, x) => { a[x.cat] = (a[x.cat] || 0) + 1; return a; }, {})).map(([k, n]) => `<span class="chip">${(EXTRA_CATS[k] || EXTRA_CATS.other).em} ${(EXTRA_CATS[k] || EXTRA_CATS.other).name}: ${n}</span>`).join('')}</div>
+      <div class="xs muted" style="margin-top:8px;line-height:1.4">Без оценок — это попадёт в отчёт для Claude, и он учтёт неделю целиком (калории тех записей, что без цифр, оценит сам).</div></div>` : ''}
     ${r.advice.length ? `<div><div class="section-cap">Предложения</div><div class="stack">${r.advice.map((a, i) => `<div class="card"><p class="prose" style="font-size:15px">${esc(a.text)}</p>${a.action ? `<div class="row" style="gap:8px;margin-top:10px"><button class="btn tiny" data-adv="${i}">Применить</button><span class="xs muted">изменение только после подтверждения</span></div>` : ''}</div>`).join('')}</div></div>` : ''}
 
     <div class="card">
@@ -346,7 +367,7 @@ function RemindersView() {
   const row = (k, ic, color, title, sub) => `<div class="li with-ic"><div class="li-ic" style="background:${color}">${ic}</div><div class="li-main"><div class="li-title">${title}</div><div class="li-sub">${sub}</div></div>${sw('r-' + k, r[k], `data-r="${k}"`)}</div>`;
   const html = `<div class="page">
     <div class="list">
-      ${row('workout', '🏋️‍♀️', 'var(--c-train)', 'Тренировки', 'Для дней, запланированных в календаре')}
+      ${row('workout', '🏋️', 'var(--c-train)', 'Тренировки', 'Для дней, запланированных в календаре')}
       ${row('weigh', '⚖️', 'var(--c-weigh)', 'Взвешивание', 'Раз в неделю утром')}
       ${row('measure', '📏', 'var(--c-measure)', 'Замеры', 'Раз в месяц')}
       ${row('recovery', '😴', 'var(--indigo)', 'День восстановления', 'После суток')}
@@ -590,9 +611,9 @@ function HelpView() {
   const steps = [
     ['📲', 'Установка на iPhone', 'Открой ссылку в Safari → кнопка «Поделиться» → «На экран „Домой“». Приложение откроется на весь экран, будет работать без интернета, и система не будет очищать его данные.'],
     ['🏠', 'Главная', 'Что запланировано, что сделано, что осталось. Кольца: калории, белок, вода. Напоминания о взвешивании, замерах и копии появляются здесь.'],
-    ['🏋️‍♀️', 'Тренировка', 'Тренировки → Начать. Вписывай вес и повторы, отмечай подход галочкой — запустится таймер отдыха. После каждого упражнения отметь, как далось, и была ли боль. В конце — «Тренировка выполнена».'],
+    ['🏋️', 'Тренировка', 'Тренировки → Начать. Вписывай вес и повторы, отмечай подход галочкой — запустится таймер отдыха. После каждого упражнения отметь, как далось, и была ли боль. В конце — «Тренировка выполнена».'],
     ['📈', 'Прогрессия', 'После тренировки приложение предложит новый вес, если все подходы выполнены на верхней границе без боли. Новый вес начинает действовать только после твоего подтверждения.'],
-    ['🍽', 'Питание', 'В каждом приёме — блюдо из плана. «Съела» записывает его с граммовками рецепта. Можно заменить блюдо или записать своё из базы продуктов. Вода — нажатием на стаканы.'],
+    ['🍽', 'Питание', 'В каждом приёме — блюдо из плана. «' + g('Съела', 'Съел') + '» записывает его с граммовками рецепта. Можно заменить блюдо или записать своё из базы продуктов. Вода — нажатием на стаканы.'],
     ['📝', 'Отчёт дня', 'Карандаш на главной: вес, сон, шаги, самочувствие, сутки, менструация. Это занимает 30 секунд, а точность рекомендаций от этого растёт.'],
     ['⚖️', 'Вес и замеры', 'Вес — раз в неделю в выбранный день, утром. Замеры — раз в месяц. Графики и сравнение — в Профиль → Мои показатели.'],
     ['📊', 'Недельный отчёт', 'В выходные появляется оценка недели: похвала за выполненное или спокойная поддержка и одна цель. Отчёт можно скопировать и отправить Claude.'],

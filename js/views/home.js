@@ -2,7 +2,7 @@
 import * as store from '../store.js';
 import { icon, rings, bar, esc } from '../ui.js';
 import { today, fmtDate, programInfo, nextWorkoutId, sessionsOn, targetsFor, dayFact, planTotals, dayRings, dayLoad, dueReminders,
-  weekDates, mondayOf, WD_SHORT, rangeLoad, weekTarget, fmt, hasFood, foodAdherence, dayLog, planForDate, weekAvgWeight, addDays, plural } from '../logic.js';
+  weekDates, mondayOf, WD_SHORT, rangeLoad, weekTarget, scheduledOn, fmt, hasFood, foodAdherence, dayLog, planForDate, weekAvgWeight, addDays, plural } from '../logic.js';
 import { WORKOUTS, sessionInfo, MODE } from '../data/program.js';
 import { RECIPES, SLOTS } from '../data/foods.js';
 import { PLAN_VERSION, CHANGELOG } from '../data/plan-meta.js';
@@ -21,7 +21,12 @@ function Home() {
   const ring = dayRings(t);
   const ss = sessionsOn(t);
   const nextW = nextWorkoutId();
-  const planned = s.planned[t];
+  const sched = scheduledOn(t).filter(p => p.kind !== 'mobility' && !p.optional);
+  // у неё расписание отмечает день тренировки, а какая именно — по кругу A → B → C
+  const todaysPending = MODE === 'weekly'
+    ? sched.find(p => !sessionsOn(t).some(x => x.workout === p.k))
+    : (sched.length && !sessionsOn(t).some(x => (x.kind || 'strength') === 'strength') ? { k: nextW } : null);
+  const planned = s.planned[t] || (todaysPending ? todaysPending.k : (MODE === 'weekly' && !sched.length && programInfo(t).week >= 1 ? 'rest' : null));
   const load = dayLoad(t);
   const d = s.daily[t] || {};
   const yesterdayShift = (s.daily[addDays(t, -1)] || {}).shift;

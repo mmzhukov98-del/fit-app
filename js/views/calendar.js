@@ -2,7 +2,7 @@
 import * as store from '../store.js';
 import { icon, esc, bar, rings, toast } from '../ui.js';
 import { today, parse, addDays, mondayOf, weekDates, WD_SHORT, MONTHS, fmtDate, sessionsOn, activitiesOn, foodAdherence, hasFood, dayFact, targetsFor,
-  planForDate, planTotals, dayLoad, sessionStats, ACT_TYPES, fmt, dayLog, slotFact, programInfo, nextWorkoutId, sessionLoad, activityLoad, programWeek } from '../logic.js';
+  planForDate, planTotals, dayLoad, sessionStats, ACT_TYPES, fmt, dayLog, slotFact, programInfo, nextWorkoutId, sessionLoad, activityLoad, programWeek, scheduledOn } from '../logic.js';
 import { WORKOUTS, sessionInfo } from '../data/program.js';
 import { EXERCISES } from '../data/exercises.js';
 import { RECIPES, SLOTS } from '../data/foods.js';
@@ -26,6 +26,11 @@ function markers(date) {
   const aa = activitiesOn(date);
   if (ss.some(x => (x.kind || 'strength') === 'strength')) out.push({ c: 'var(--c-train)' });
   else if (date >= t && s.planned[date] && s.planned[date] !== 'rest') out.push({ c: 'var(--c-train)', ring: true });
+  else if (date >= t && !s.planned[date] && !(s.daily[date] || {}).shift) {
+    const sc = scheduledOn(date).filter(p => p.kind !== 'mobility' && !p.optional);
+    if (sc.some(p => p.kind === 'strength')) out.push({ c: 'var(--c-train)', ring: true });
+    if (sc.some(p => p.kind === 'run' || p.kind === 'bike')) out.push({ c: 'var(--c-cardio)', ring: true });
+  }
   if (ss.some(x => x.kind === 'run' || x.kind === 'bike') || aa.some(a => ACT_TYPES[a.type]?.aerobic)) out.push({ c: 'var(--c-cardio)' });
   if (!ss.length && !aa.length && (s.planned[date] === 'rest' || (s.daily[date] || {}).shift)) out.push({ c: 'var(--c-rest)' });
   const fa = foodAdherence(date);
@@ -140,6 +145,9 @@ export function dayCard(date, compact = false) {
     }).join('');
   } else if (pw) {
     train = `<button class="li tap" data-go="train/w/${pw}"><div class="li-ic" style="background:${sessionInfo(pw, programWeek(date)).color};font-weight:800">${pw}</div><div class="li-main"><div class="li-title" style="font-size:16px">Запланирована: ${esc(sessionInfo(pw, programWeek(date)).name)}</div><div class="li-sub">${date < t ? 'Не выполнена' : `~${sessionInfo(pw, programWeek(date)).duration} мин · ${(sessionInfo(pw, programWeek(date)).items || []).length ? (sessionInfo(pw, programWeek(date)).items.length + " упражнений") : esc(sessionInfo(pw, programWeek(date)).minText || "") + " мин"}`}</div></div>${icon('chev', 'chev')}</button>`;
+  } else if (!planned && !d.shift && date >= t && scheduledOn(date).length) {
+    // по расписанию недели
+    train = scheduledOn(date).map(p => `<button class="li tap" data-go="train/w/${p.k}"><div class="li-ic" style="background:${p.info.color};font-weight:800">${p.kind === 'strength' ? p.k : ({ run: '🏃', bike: '🚴', mobility: '🧘' }[p.kind])}</div><div class="li-main"><div class="li-title" style="font-size:16px">По расписанию: ${esc(p.info.name)}${p.optional ? ' (по желанию)' : ''}</div><div class="li-sub">${p.kind === 'strength' ? `~${p.info.duration} мин` : `${esc(p.info.minText || '')} мин`}</div></div>${icon('chev', 'chev')}</button>`).join('');
   } else {
     train = `<div class="li"><div class="li-ic" style="background:var(--c-rest)">🌿</div><div class="li-main"><div class="li-title" style="font-size:16px">${planned === 'rest' ? 'День отдыха' : d.shift ? 'Сутки на работе' : 'Без тренировки'}</div></div></div>`;
   }

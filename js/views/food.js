@@ -1,8 +1,10 @@
 // Питание: дневник, план vs факт, меню, рецепты, покупки, готовка, таблица продуктов, история.
 import * as store from '../store.js';
-import { icon, esc, rings, bar, barChart, toast, confirmDialog } from '../ui.js';
+import { g } from '../gender.js';
+import { icon, esc, rings, bar, barChart, toast, confirmDialog, sw } from '../ui.js';
+import { WHO } from '../data/program.js';
 import { today, fmtDate, addDays, mondayOf, weekDates, WD_SHORT, parse, targetsFor, dayFact, slotFact, planForDate, planTotals, recipeTotals,
-  recipeToEntry, dayLog, hasFood, foodAdherence, macrosFor, fmt, r1, menuIndex, entryTotals, fmtShort, portionGrams, HIM_PORTION } from '../logic.js';
+  recipeToEntry, dayLog, hasFood, foodAdherence, macrosFor, fmt, r1, menuIndex, entryTotals, fmtShort, portionGrams, HIM_PORTION, EXTRA_CATS, EXTRA_SIZES } from '../logic.js';
 import { FOODS, FOOD_CATS, RECIPES, SLOTS, WEEK_MENU, PREP_PLAN, COOKING_GUIDE, PICK, PRICE_SRC, PRICE_DATE, PRICE_SHOP } from '../data/foods.js';
 import { entrySheet, dishPicker, saveEntry } from './sheets.js';
 import { go } from '../app.js';
@@ -50,7 +52,7 @@ function FoodDiary(params = {}) {
         return `<div class="plan-dish">
           <button class="dish-em" style="background:${r.bg}" data-go="food/recipe/${id}" aria-label="Рецепт">${r.em}</button>
           <button class="grow" style="text-align:left" data-go="food/recipe/${id}"><b>${esc(r.name)}</b><span>${fmt(rt.kcal)} ккал · Б ${fmt(rt.p)} · Ж ${fmt(rt.f)} · У ${fmt(rt.c)}</span></button>
-          ${eaten ? `<span class="check on">${icon('check')}</span>` : `<button class="btn tiny" data-eat="${sl.id}:${id}">Съела</button>`}
+          ${eaten ? `<span class="check on">${icon('check')}</span>` : `<button class="btn tiny" data-eat="${sl.id}:${id}">${g('Съела', 'Съел')}</button>`}
         </div>`;
       }).join('')}
       ${entries.filter(e => !ids.includes(e.recipeId) || !e.recipeId || true).length ? `<div style="margin-top:10px">${entries.map(e => { const et = entryTotals(e); return `<button class="entry" style="width:100%;text-align:left" data-edit="${sl.id}:${e.id}"><div class="grow"><b>${esc(e.name)}</b><span>${e.items.map(i => `${esc(i.name)} ${fmt(i.g)} г`).join(', ')}</span></div><div class="k">${fmt(et.kcal)}</div>${icon('chev', 'chev')}</button>`; }).join('')}</div>` : ''}
@@ -91,6 +93,13 @@ function FoodDiary(params = {}) {
 
     ${slotsHtml}
 
+    <div class="card">
+      <div class="card-h"><span class="ic" style="background:var(--orange)">🍕</span>Сверх плана<span class="right">${(log.extras || []).length ? `${(log.extras || []).length} шт.` : 'ничего'}</span></div>
+      ${(log.extras || []).length ? (log.extras || []).map(x => `<button class="entry" style="width:100%;text-align:left" data-extra="${esc(x.id)}"><span style="font-size:20px">${(EXTRA_CATS[x.cat] || EXTRA_CATS.other).em}</span><div class="grow"><b>${esc(x.what || (EXTRA_CATS[x.cat] || EXTRA_CATS.other).name)}</b><span>${esc((EXTRA_CATS[x.cat] || EXTRA_CATS.other).name)} · ${EXTRA_SIZES[x.size] || ''}${x.kcal ? ` · ${fmt(x.kcal)} ккал` : ' · ккал не известны'}</span></div>${icon('chev', 'chev')}</button>`).join('')
+        : '<div class="muted small" style="line-height:1.4">Если было что-то лишнее — запиши, даже без калорий. Это не для самокритики: в недельном отчёте Claude оценит неделю целиком.</div>'}
+      <button class="add-line" data-extra-add="1">${icon('plusCircle')} Добавить</button>
+    </div>
+
     <div class="list">
       <button class="li tap with-ic" data-go="food/menu"><div class="li-ic" style="background:var(--tint)">${icon('calendar')}</div><div class="li-main li-title">Меню на 7 дней</div>${icon('chev', 'chev')}</button>
       <button class="li tap with-ic" data-go="food/shop"><div class="li-ic" style="background:var(--green)">${icon('cart')}</div><div class="li-main li-title">Список покупок</div>${icon('chev', 'chev')}</button>
@@ -130,10 +139,46 @@ function FoodDiary(params = {}) {
         const swp = e.target.closest('[data-swap]');
         if (swp) { dishPicker(date, swp.dataset.swap, { mode: 'swap' }); return; }
         const ed = e.target.closest('[data-edit]');
-        if (ed) { const [sl, id] = ed.dataset.edit.split(':'); const en = ((dayLog(date).slots || {})[sl] || []).find(x => x.id === id); if (en) entrySheet(date, sl, en); }
+        if (ed) { const [sl, id] = ed.dataset.edit.split(':'); const en = ((dayLog(date).slots || {})[sl] || []).find(x => x.id === id); if (en) entrySheet(date, sl, en); return; }
+        if (e.target.closest('[data-extra-add]')) { extraSheet(date); return; }
+        const ex = e.target.closest('[data-extra]');
+        if (ex) extraSheet(date, (dayLog(date).extras || []).find(x => x.id === ex.dataset.extra));
       });
     }
   };
+}
+
+// Запись «сверх плана»: категория, что именно, примерный размер, калории — если известны
+async function extraSheet(date, existing = null) {
+  const { openSheet, closeSheet } = await import('../ui.js');
+  const x = existing ? { ...existing } : { cat: 'sweet', size: 'm', what: '', kcal: null };
+  openSheet({
+    title: existing ? 'Сверх плана' : 'Что было лишнего?', right: 'Готово',
+    body: `
+      <div class="chips" id="x-cat">${Object.entries(EXTRA_CATS).map(([k, c]) => `<button class="chip ${x.cat === k ? 'on' : ''}" data-c="${k}">${c.em} ${c.name}</button>`).join('')}</div>
+      <label class="field"><span>Что именно</span><input class="input" id="x-what" maxlength="80" placeholder="Например: 2 бокала вина, кусок торта" value="${esc(x.what || '')}"></label>
+      <div><div class="section-cap">Сколько примерно</div><div class="seg" id="x-size">${Object.entries(EXTRA_SIZES).map(([k, l]) => `<button class="${x.size === k ? 'on' : ''}" data-s="${k}">${l}</button>`).join('')}</div></div>
+      <label class="field"><span>Калории, если знаешь (необязательно)</span><input class="input" id="x-kcal" inputmode="numeric" placeholder="можно оставить пустым" value="${x.kcal || ''}"></label>
+      <div class="note">Калории, если указаны, войдут в итог дня. Если нет — запись всё равно попадёт в недельный отчёт, и Claude оценит неделю целиком.</div>
+      ${existing ? '<button class="btn gray" id="x-del" style="color:var(--red)">Удалить</button>' : ''}`,
+    onMount: w => {
+      w.querySelector('#x-cat').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; x.cat = b.dataset.c; w.querySelectorAll('#x-cat .chip').forEach(c => c.classList.toggle('on', c === b)); });
+      w.querySelector('#x-size').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b) return; x.size = b.dataset.s; w.querySelectorAll('#x-size button').forEach(c => c.classList.toggle('on', c === b)); });
+      const del = w.querySelector('#x-del');
+      if (del) del.addEventListener('click', () => { store.update(s => { s.food[date].extras = (s.food[date].extras || []).filter(e => e.id !== existing.id); }); closeSheet(); });
+    },
+    onRight: w => {
+      const kcal = parseInt(w.querySelector('#x-kcal').value, 10);
+      const rec = { id: existing ? existing.id : store.uid(), cat: x.cat, size: x.size, what: w.querySelector('#x-what').value.trim().slice(0, 80), kcal: kcal > 0 && kcal < 5000 ? kcal : null };
+      store.update(s => {
+        s.food[date] = s.food[date] || { slots: {}, water: 0, swaps: {} };
+        const arr = (s.food[date].extras || []).filter(e => e.id !== rec.id);
+        arr.push(rec);
+        s.food[date].extras = arr;
+      });
+      toast('Записано');
+    }
+  });
 }
 
 function guessSlot() {
@@ -179,7 +224,8 @@ function RecipeView(id) {
   const r = RECIPES[id];
   if (!r) return { title: 'Рецепт', back: 'food', html: '' };
   const t = recipeTotals(id);
-  const two = !r.sweet && !r.himOnly;
+  const cook2 = cookForTwo();
+  const two = cook2 && !r.sweet && !r.himOnly;
   const tHer = recipeTotals(id, 1), tHim = recipeTotals(id, HIM_PORTION);
   const slot = SLOTS.find(s => s.id === r.slot);
   const html = `<div class="page">
@@ -192,9 +238,10 @@ function RecipeView(id) {
       <div><div class="k">Углеводы</div><div class="v" style="color:var(--c-carb)">${fmt(t.c)} г</div></div>
     </div>
     ${two ? `<div class="card"><div class="row between small"><span class="muted">Её порция</span><b class="num">${fmt(tHer.kcal)} ккал · Б ${fmt(tHer.p)}</b></div><div class="row between small" style="margin-top:4px"><span class="muted">Его порция (×${String(HIM_PORTION).replace('.', ',')})</span><b class="num">${fmt(tHim.kcal)} ккал · Б ${fmt(tHim.p)}</b></div></div>` : ''}
-    <div><div class="section-cap">${two ? 'Ингредиенты: она / он' : 'Ингредиенты на 1 порцию'}</div><div class="card">
-      ${r.ing.map(([fid, g0]) => { const g = portionGrams(id, g0, 1), gh = portionGrams(id, g0, HIM_PORTION); const f = FOODS[fid], m = macrosFor(fid, portionGrams(id, g0)); return `<div class="ing"><div><div>${esc(f.name)}</div><div class="xs muted">${fmt(m.kcal)} ккал · Б ${fmt(m.p, 1)} · Ж ${fmt(m.f, 1)} · У ${fmt(m.c, 1)} (твоя порция)${f.yield && f.yield !== 1 ? ` · готового ≈ ${fmt(portionGrams(id, g0) * f.yield)} г` : ''}</div></div><span class="g">${two ? `${fmt(g)} / <b>${fmt(gh)}</b> г` : `${fmt(g)} г`}${f.unit ? `<br><span class="xs">≈ ${fmt(portionGrams(id, g0) / f.unit.g, 1)} ${f.unit.name}</span>` : ''}</span></div>`; }).join('')}
-    </div><div class="section-foot">Вес — в сыром/сухом виде, если не указано иное. ${two ? `Готовите общую кастрюлю на двоих (≈ ×${String(1 + HIM_PORTION).replace('.', ',')} от её порции) и делите по весу.` : ''} Клетчатка: ${fmt(t.fib)} г.</div></div>
+    <div class="toggle-row card" style="padding:12px 16px"><div><b>Готовим на двоих</b><div class="xs muted">${two ? 'Граммовки — на общую кастрюлю' : 'Граммовки — только на твою порцию'}</div></div>${sw('cook2', cook2)}</div>
+    <div><div class="section-cap">${two ? 'Ингредиенты на двоих (всего · она + он)' : 'Ингредиенты на твою порцию'}</div><div class="card">
+      ${r.ing.map(([fid, g0]) => { const g = portionGrams(id, g0, 1), gh = portionGrams(id, g0, HIM_PORTION), mine = portionGrams(id, g0); const f = FOODS[fid], m = macrosFor(fid, mine); const shown = two ? g + gh : mine; return `<div class="ing"><div><div>${esc(f.name)}</div><div class="xs muted">${two ? `она ${fmt(g)} г + он ${fmt(gh)} г` : `${fmt(m.kcal)} ккал · Б ${fmt(m.p, 1)} · Ж ${fmt(m.f, 1)} · У ${fmt(m.c, 1)}`}${f.yield && f.yield !== 1 ? ` · готового ≈ ${fmt(shown * f.yield)} г` : ''}</div></div><span class="g"><b>${fmt(shown)} г</b>${f.unit ? `<br><span class="xs">≈ ${fmt(shown / f.unit.g, 1)} ${f.unit.name}</span>` : ''}</span></div>`; }).join('')}
+    </div><div class="section-foot">Вес — в сыром/сухом виде, если не указано иное. ${two ? 'Готовая еда делится по весу в той же пропорции: ей ≈ 43%, ему ≈ 57%.' : ''} Клетчатка в твоей порции: ${fmt(t.fib)} г.</div></div>
     <div><div class="section-cap">Приготовление</div><div class="card"><ol class="ol">${r.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></div></div>
     ${r.tips ? `<div class="card"><div class="card-h"><span class="ic" style="background:var(--orange)">💡</span>Совет</div><p class="prose">${esc(r.tips)}</p></div>` : ''}
     ${r.alts && r.alts.length ? `<div><div class="section-cap">Если чего-то нет — замены</div><div class="card"><ul class="ul">${r.alts.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div></div>` : ''}
@@ -202,23 +249,44 @@ function RecipeView(id) {
   </div>`;
   return {
     title: r.name, back: 'food', backLabel: 'Назад', html,
-    mount: root => root.querySelector('#log-now').addEventListener('click', () => {
-      saveEntry(today(), r.slot, recipeToEntry(id, true));
-      toast('Записано в дневник');
-    })
+    mount: root => {
+      root.querySelector('#log-now').addEventListener('click', () => {
+        saveEntry(today(), r.slot, recipeToEntry(id, true));
+        toast('Записано в дневник');
+      });
+      bindCookToggle(root);
+    }
   };
+}
+
+// «Готовим на двоих»: настройка своя на каждом телефоне
+export function cookForTwo() { return store.get().settings.cookForTwo !== false; }
+function bindCookToggle(root) {
+  const el = root.querySelector('#cook2');
+  if (el) el.addEventListener('change', () => store.update(st => { st.settings.cookForTwo = el.checked; }));
+}
+// Сколько продуктов нужно на набор рецептов с учётом режима готовки
+function needFor(rids, two) {
+  const agg = {};
+  const add = (fid, g) => { agg[fid] = (agg[fid] || 0) + g; };
+  rids.forEach(rid => RECIPES[rid].ing.forEach(([fid, g]) => {
+    if (two) { if (!RECIPES[rid].himOnly) add(fid, portionGrams(rid, g, 1)); add(fid, portionGrams(rid, g, HIM_PORTION)); }
+    else add(fid, portionGrams(rid, g));
+  }));
+  return agg;
 }
 
 /* ---------- Список покупок ---------- */
 function ShopView() {
   const s = store.get();
   const agg = {};
-  // На двоих: её порция + его порция (×1,35), сладкое — каждому
+  // На двоих: её порция + его порция (×1,35), сладкое — каждому. Выкл — только своя порция.
+  const two = cookForTwo();
   const add = (fid, g) => { agg[fid] = (agg[fid] || 0) + g; };
-  WEEK_MENU.forEach(day => Object.values(day).flat().forEach(rid => RECIPES[rid].ing.forEach(([fid, g]) => { add(fid, portionGrams(rid, g, 1)); add(fid, portionGrams(rid, g, HIM_PORTION)); })));
+  Object.entries(needFor(WEEK_MENU.flatMap(day => Object.values(day).flat()), two)).forEach(([fid, g]) => add(fid, g));
   // его ежедневный белковый перекус и её запас на дни суток (~2 в неделю)
-  RECIPES.m_snack.ing.forEach(([fid, g]) => add(fid, g * 7));
-  RECIPES.s_shift.ing.forEach(([fid, g]) => add(fid, g * 2));
+  if (two || WHO === 'him') RECIPES.m_snack.ing.forEach(([fid, g]) => add(fid, g * 7));
+  if (two || WHO !== 'him') RECIPES.s_shift.ing.forEach(([fid, g]) => add(fid, g * 2));
   const byCat = {};
   let total = 0;
   for (const [fid, g] of Object.entries(agg)) {
@@ -231,7 +299,7 @@ function ShopView() {
     (byCat[f.cat] = byCat[f.cat] || []).push({ fid, f, g, buy, price, perKg, own: !!own });
   }
   const html = `<div class="page">
-    <div class="card"><div class="row between"><div><div class="muted small">На неделю на двоих · бюджет ${fmt(s.budget || 10000)} ₽</div><div class="big-num">≈ ${fmt(Math.round(total / 50) * 50)} ₽</div></div><button class="btn tiny gray" id="shop-reset">Сбросить отметки</button></div>
+    <div class="card"><div class="row between"><div><div class="muted small">${two ? `На неделю на двоих · бюджет ${fmt(s.budget || 10000)} ₽` : 'На неделю — только на тебя'}</div><div class="big-num">≈ ${fmt(Math.round(total / 50) * 50)} ₽</div></div><button class="btn tiny gray" id="shop-reset">Сбросить отметки</button></div>
     <div style="margin-top:8px">${bar(total, s.budget || 10000, total > (s.budget || 10000) ? 'var(--orange)' : 'var(--green)')}</div>
     <div class="xs muted" style="margin-top:6px">«Магнит ✓» — цены из каталога: ${esc(PRICE_SHOP)}, ${PRICE_DATE}. «Не проверено» — ориентир. Нажми на цену и впиши свою из чека — бюджет пересчитается. Специи, соль и чеснок не учтены.</div></div>
     ${FOOD_CATS.filter(c => byCat[c]).map(c => `<div><div class="section-cap">${esc(c)}</div><div class="list">${byCat[c].map(x => `<div class="shop-item ${s.shopDone[x.fid] ? 'done' : ''}">
@@ -265,13 +333,19 @@ function ShopView() {
 
 /* ---------- Готовка ---------- */
 function GuideView() {
+  const two = cookForTwo();
+  // что закупить и отвесить на каждую готовку (основные блюда, которые заготавливаются заранее)
+  const prepRids = days => days.flatMap(i => Object.values(WEEK_MENU[i]).flat()).filter(rid => RECIPES[rid].prep > 0);
+  const needList = days => Object.entries(needFor(prepRids(days), two)).sort((a, b) => b[1] - a[1]).map(([fid, g]) => `<div class="ing"><span>${esc(FOODS[fid].name)}</span><span class="g"><b>${fmt(Math.round(g / 5) * 5)} г</b></span></div>`).join('');
   const html = `<div class="page">
-    ${PREP_PLAN.map(p => `<div><div class="section-cap">${esc(p.name)}</div><div class="card"><div class="muted small" style="margin-bottom:6px">${esc(p.when)}</div><ol class="ol">${p.tasks.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div></div>`).join('')}
+    <div class="toggle-row card"><div><b>Готовим на двоих</b><div class="xs muted" style="line-height:1.4;margin-top:2px">${two ? 'Вкл: заготовки и граммовки в рецептах — на двоих (её порция + его ×1,35). Готовая еда делится по весу: ей ≈ 43%, ему ≈ 57%.' : `Выкл: всё считается только на ${WHO === 'him' ? 'твою порцию (×1,35)' : 'твою порцию'}.`}</div></div>${sw('cook2', two)}</div>
+    ${PREP_PLAN.map((p, i) => `<div><div class="section-cap">${esc(p.name)}</div><div class="card"><div class="muted small" style="margin-bottom:6px">${esc(p.when)}</div><ol class="ol">${p.tasks.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+      <details style="margin-top:8px"><summary class="tint small" style="cursor:pointer;font-weight:600">Сколько отвесить (сырой вес) — ${two ? 'на двоих' : 'на тебя'}</summary><div style="margin-top:6px">${needList(i === 0 ? [0, 1, 2] : [3, 4, 5, 6])}</div></details></div></div>`).join('')}
     <div><div class="section-cap">Рекомендации</div><div class="stack">${COOKING_GUIDE.map(g => `<div class="card"><b>${esc(g.t)}</b><p class="prose muted" style="margin-top:4px;font-size:15px">${esc(g.d)}</p></div>`).join('')}</div></div>
     <div><div class="section-cap">Сырой → готовый вес</div><div class="list">${Object.values(FOODS).filter(f => f.yield && f.yield !== 1).map(f => `<div class="li"><div class="li-main"><div class="li-title" style="font-size:15px">${esc(f.name)}</div></div><span class="li-val num">×${String(f.yield).replace('.', ',')}</span></div>`).join('')}</div>
     <div class="section-foot">Например: 60 г сухих макарон × 2,3 ≈ 140 г готовых; 150 г сырой курицы × 0,7 ≈ 105 г готовой.</div></div>
   </div>`;
-  return { title: 'Как готовить', back: 'food', backLabel: 'Питание', html };
+  return { title: 'Как готовить', back: 'food', backLabel: 'Питание', html, mount: root => bindCookToggle(root) };
 }
 
 /* ---------- Таблица продуктов ---------- */

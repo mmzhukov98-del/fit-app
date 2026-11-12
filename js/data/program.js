@@ -141,6 +141,22 @@ for (let w = 1; w <= 12; w++) {
   );
 }
 
+// Дни недели (0 = Пн). Тяжёлые ноги (A) — в понедельник, далеко от интенсивной и длительной.
+// В пятницу C — ноги вполсилы, т.к. в субботу длительная.
+const HIM_DAY = { A: 0, E1: 1, M1: 1, B: 2, E2: 3, Q: 3, C: 4, L: 5, M2: 6 };
+for (let w = 1; w <= 12; w++) {
+  HIM_WEEKS[w] = HIM_WEEKS[w].map(x => {
+    const o = typeof x === 'string' ? { k: x, kind: 'strength' } : { ...x };
+    o.day = o.k === 'BK' ? (w <= 2 ? 5 : 6) : HIM_DAY[o.k];
+    return o;
+  });
+}
+export const HER_DAYS = { A: 0, B: 2, C: 4 };
+export const DAY_NOTE = {
+  her: 'Расписание: Пн — A, Ср — B, Пт — C. После суток не тренируйся — сдвигай тренировку на ближайший свободный день, порядок A → B → C сохраняется.',
+  him: 'Пн — A (тяжёлые ноги) · Вт — лёгкий бег + мобильность · Ср — B · Чт — интенсивная (на 1–4 неделях — лёгкий бег) · Пт — C (ноги вполсилы: завтра длительная) · Сб — длительная · Вс — отдых, мобильность. Можно сдвигать, но тренировка A — никогда накануне интенсивной или длительной.'
+};
+
 /* ===================== Общее ===================== */
 export const PROGRAMS = {
   her: { WORKOUTS: HER_WORKOUTS, ORDER: ['A', 'B', 'C'], PHASES: HER_PHASES, TOTAL_WEEKS: 10, MODE: 'rotation' },
@@ -169,7 +185,14 @@ export function phaseForWeek(week) {
 export function weekPlan(week) {
   if (MODE !== 'weekly') return null;
   const w = Math.min(Math.max(week, 1), TOTAL_WEEKS);
-  return PROGRAMS[WHO].WEEKS[w].map(x => (typeof x === 'string' ? { k: x, kind: 'strength' } : x));
+  return PROGRAMS[WHO].WEEKS[w].map(x => (typeof x === 'string' ? { k: x, kind: 'strength' } : x)).sort((a, b) => (a.day ?? 9) - (b.day ?? 9));
+}
+
+// Что стоит в расписании на день недели (0 = Пн) для недели программы week
+export function scheduleForWeekday(wd, week) {
+  if (MODE === 'weekly') return (weekPlan(Math.max(1, week)) || []).filter(p => p.day === wd);
+  const k = Object.keys(HER_DAYS).find(key => HER_DAYS[key] === wd);
+  return k ? [{ k, kind: 'strength', day: wd }] : [];
 }
 
 const RUN_COLORS = { run: '#ff9500', bike: '#34c759', mobility: '#5ac8fa' };

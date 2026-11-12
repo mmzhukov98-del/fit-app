@@ -1,8 +1,9 @@
 // Тренировки: программа, упражнения, живая запись, отчёт, история.
 import * as store from '../store.js';
+import { g } from '../gender.js';
 import { icon, esc, poseSVG, lineChart, openSheet, closeSheet, toast, confirmDialog, scale5, bindScales, sw } from '../ui.js';
-import { today, fmtDate, fmtShort, programInfo, planItems, nextWorkoutId, progression, historyFor, sessionStats, previousEntry, fmt, plural, sessionsBetween, mondayOf, addDays, weekProgress, programWeek, weekTarget } from '../logic.js';
-import { WORKOUTS, ORDER, PHASES, TOTAL_WEEKS, RUN_PLAN, PROGRESSION_RULES, MODE, WHO, sessionInfo, RUN_RULES, SEASON } from '../data/program.js';
+import { today, fmtDate, fmtShort, programInfo, planItems, nextWorkoutId, progression, historyFor, sessionStats, previousEntry, fmt, plural, sessionsBetween, mondayOf, addDays, weekProgress, programWeek, weekTarget, WD_SHORT } from '../logic.js';
+import { WORKOUTS, ORDER, PHASES, TOTAL_WEEKS, RUN_PLAN, PROGRESSION_RULES, MODE, WHO, sessionInfo, RUN_RULES, SEASON, HER_DAYS, DAY_NOTE } from '../data/program.js';
 import { HIM_WARMUP_RUN, HIM_WARMUP_GYM, HIM_COOLDOWN_RUN, MOBILITY_SESSION } from '../data/exercises-him.js';
 import { EXERCISES, WARMUP, COOLDOWN } from '../data/exercises.js';
 import { go } from '../app.js';
@@ -44,6 +45,11 @@ function TrainHome() {
       <div class="row between xs muted" style="margin-top:6px"><span>Техника</span><span>Рост</span><span>Разгрузка</span><span>Развитие</span></div>
     </div>
 
+    <div class="card">
+      <div class="card-h"><span class="ic" style="background:var(--tint)">${icon('calendar')}</span>Расписание недели</div>
+      <div class="week-strip">${WD_SHORT.map((d, i) => { const k = Object.keys(HER_DAYS).find(x => HER_DAYS[x] === i); return `<div class="ws-day ${k ? '' : ''}"><span class="wd">${d}</span><span class="d" style="${k ? `background:${WORKOUTS[k].color};color:#fff;font-weight:800` : 'color:var(--label-3)'}">${k || '·'}</span></div>`; }).join('')}</div>
+      <div class="xs muted" style="margin-top:6px;line-height:1.4">${esc(DAY_NOTE.her)}</div>
+    </div>
     <div>
       <div class="section-h"><h2>Следующая</h2><span class="muted small">на этой неделе ${weekSess.length}/${s.targets.workoutsPerWeek}</span></div>
       ${workoutCard(nextW, true)}
@@ -100,11 +106,11 @@ function WorkoutView(id) {
           <div class="li-main"><div class="li-title" style="font-size:16px;font-weight:600">${i + 1}. ${esc(ex.short)}${it.swapped ? ' <span class="chip green" style="font-size:11px">новое</span>' : ''}</div>
             <div class="li-sub">${repsText(it, ex)} · ${weightText(it, ex)} · отдых ${it.rest} с</div>
             ${it.note ? `<div class="li-sub">${esc(it.note)}</div>` : ''}
-            ${p.type === 'up' || p.type === 'up-reps' ? '<div class="li-sub ok">▲ готова к прогрессии</div>' : p.type === 'pain' ? '<div class="li-sub bad">⚠︎ была боль — без повышения</div>' : ''}
+            ${p.type === 'up' || p.type === 'up-reps' ? `<div class="li-sub ok">▲ ${g('готова', 'готов')} к прогрессии</div>` : p.type === 'pain' ? '<div class="li-sub bad">⚠︎ была боль — без повышения</div>' : ''}
           </div>${icon('chev', 'chev')}</button>`;
       }).join('')}</div>
     </div>
-    <details class="card"><summary style="font-weight:600;cursor:pointer">🧘‍♀️ Заминка · 5–10 мин</summary><ul class="ul" style="margin-top:8px">${COOLDOWN.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="muted small" style="margin-top:8px">${esc(w.cardio)}</p></details>
+    <details class="card"><summary style="font-weight:600;cursor:pointer">🧘 Заминка · 5–10 мин</summary><ul class="ul" style="margin-top:8px">${COOLDOWN.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="muted small" style="margin-top:8px">${esc(w.cardio)}</p></details>
     ${s.active ? (s.active.workout === id ? `<button class="btn green" data-go="train/session">${icon('play')} Продолжить тренировку</button>` : `<div class="note">Сейчас идёт тренировка ${s.active.workout}. Заверши её, чтобы начать эту.</div>`) : `<button class="btn" id="start">${icon('play')} Начать тренировку ${id}</button>`}
     <div class="note">Веса — ориентир. Если с рекомендованным весом остаётся запас больше 4 повторов или, наоборот, техника ломается — измени вес прямо в тренировке.</div>
   </div>`;
@@ -170,9 +176,9 @@ function TrainHomeWeekly() {
       <div class="list">${wp.plan.map(p => `<button class="li tap with-ic" data-go="train/w/${p.k}">
         <div class="li-ic" style="background:${p.info.color};font-weight:800">${p.kind === 'strength' ? p.k : em(p.kind)}</div>
         <div class="li-main"><div class="li-title" style="font-size:16px">${esc(p.kind === 'strength' ? p.info.name : p.info.name)}${p.optional ? ' <span class="xs muted">по желанию</span>' : ''}</div>
-        <div class="li-sub">${p.kind === 'strength' ? `~${p.info.duration} мин · ${(p.info.items || []).length} упражнений` : `${esc(p.info.minText || '')} мин${p.info.quality ? ' · интенсивная' : p.info.long ? ' · длительная' : ''}`}</div></div>
+        <div class="li-sub"><b class="tint">${p.day !== undefined ? WD_SHORT[p.day] : ''}</b> · ${p.kind === 'strength' ? `~${p.info.duration} мин · ${(p.info.items || []).length} упражнений` : `${esc(p.info.minText || '')} мин${p.info.quality ? ' · интенсивная' : p.info.long ? ' · длительная' : ''}`}</div></div>
         <span class="check ${p.done ? 'on' : ''}">${p.done ? icon('check') : ''}</span></button>`).join('')}</div>
-      <div class="section-foot">Порядок по дням — примерный (Пн A · Вт лёгкий бег · Ср B · Чт интенсивная · Пт C · Сб длительная). Главное: тренировка A не накануне интервалов и длительной; две тренировки в день — утром бег, вечером зал.</div>
+      <div class="section-foot">${esc(DAY_NOTE.him)} Две тренировки в день — утром бег, вечером зал.</div>
     </div>
 
     <div class="card">
@@ -296,7 +302,7 @@ let sessIv = null;
 function SessionView() {
   const s = store.get();
   const a = s.active;
-  if (!a) return { title: 'Тренировка', back: 'train', large: false, html: `<div class="page"><div class="empty-state"><div class="em">🏋️‍♀️</div><b>Нет активной тренировки</b>Начни тренировку из раздела «Тренировки».</div></div>` };
+  if (!a) return { title: 'Тренировка', back: 'train', large: false, html: `<div class="page"><div class="empty-state"><div class="em">🏋️</div><b>Нет активной тренировки</b>Начни тренировку из раздела «Тренировки».</div></div>` };
   const w = WORKOUTS[a.workout];
   const html = `
   <div class="page" style="padding-top:8px">
@@ -675,7 +681,7 @@ function RulesView() {
   }
   const html = `<div class="page">
     <div><div class="section-cap">Двойная прогрессия</div><div class="card"><ul class="ul good">${PROGRESSION_RULES.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
-    <div class="section-foot">Пример: 3 × 10–12. Выполнила 12/12/12 с запасом и без боли — следующий раз +2,5 кг и снова от 10 повторов.</div></div>
+    <div class="section-foot">Пример: 3 × 10–12. ${g('Выполнила', 'Выполнил')} 12/12/12 с запасом и без боли — следующий раз +2,5 кг и снова от 10 повторов.</div></div>
     <div><div class="section-cap">Безопасность</div><div class="card"><ul class="ul">
       <li>Запас 2–3 повтора в каждом подходе, без работы «до отказа» — пока нет допуска врача к интенсивным нагрузкам.</li>
       <li>Никакой задержки дыхания на усилии: выдох — на самой тяжёлой части движения.</li>

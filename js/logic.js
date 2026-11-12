@@ -1,7 +1,8 @@
 // Расчёты: даты, программа, прогрессия, питание, нагрузка, отчёты.
 import { get, todayStr } from './store.js';
+import { g } from './gender.js';
 import { EXERCISES } from './data/exercises.js';
-import { WORKOUTS, ORDER, phaseForWeek, TOTAL_WEEKS, MODE, WHO, weekPlan, sessionInfo } from './data/program.js';
+import { WORKOUTS, ORDER, phaseForWeek, TOTAL_WEEKS, MODE, WHO, weekPlan, sessionInfo, scheduleForWeekday } from './data/program.js';
 import { FOODS, RECIPES, WEEK_MENU, SLOTS } from './data/foods.js';
 
 /* ---------- Даты ---------- */
@@ -92,9 +93,18 @@ export function weekProgress(date = today()) {
   const doneKeys = new Set(done.map(x => x.workout));
   return { week, from, to, plan: plan.map(p => ({ ...p, done: doneKeys.has(p.k), info: sessionInfo(p.k, week) })) };
 }
+// Что запланировано на дату по расписанию недели (без учёта ручного плана в календаре)
+export function scheduledOn(date) {
+  const w = programWeek(date);
+  if (w < 1 || w > TOTAL_WEEKS + 0) return [];
+  return scheduleForWeekday(weekday(date), w).map(p => ({ ...p, info: sessionInfo(p.k, w) }));
+}
 export function nextWorkoutId() {
   if (MODE === 'weekly') {
     const wp = weekProgress();
+    const t = today();
+    const todays = scheduledOn(t).filter(p => p.kind !== 'mobility' && !p.optional && !sessionsOn(t).some(x => x.workout === p.k));
+    if (todays.length) return todays[0].k;
     const next = wp.plan.find(p => !p.done && p.kind !== 'mobility' && !p.optional);
     return next ? next.k : (wp.plan.find(p => !p.done) || {}).k || 'A';
   }
@@ -236,7 +246,25 @@ export function dayFact(date) {
   const log = dayLog(date);
   const all = [];
   for (const sl of Object.values(log.slots || {})) for (const e of sl) all.push(entryTotals(e));
+  // «Сверх плана»: учитываем калории, только если они известны
+  for (const x of log.extras || []) if (x.kcal > 0) all.push({ kcal: x.kcal });
   return sumM(all);
+}
+
+/* ---------- Сверх плана (лишнее съеденное/выпитое) ---------- */
+export const EXTRA_CATS = {
+  sweet: { name: 'Сладкое', em: '🍬' },
+  alcohol: { name: 'Алкоголь', em: '🍷' },
+  fastfood: { name: 'Фастфуд', em: '🍔' },
+  snack: { name: 'Перекус вне плана', em: '🍪' },
+  drink: { name: 'Сладкий напиток / кофе с сахаром', em: '🥤' },
+  other: { name: 'Другое', em: '🍽' }
+};
+export const EXTRA_SIZES = { s: 'немного', m: 'порция', l: 'много' };
+export function extrasBetween(from, to) {
+  const out = [];
+  for (const [d, log] of Object.entries(get().food)) if (d >= from && d <= to) for (const x of log.extras || []) out.push({ date: d, ...x });
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 export function slotFact(date, slot) { return sumM(((dayLog(date).slots || {})[slot] || []).map(entryTotals)); }
 export function hasFood(date) { const log = dayLog(date); return Object.values(log.slots || {}).some(a => a.length); }
@@ -290,12 +318,12 @@ export function foodAdherence(date) {
 
 /* ---------- Нагрузка (условные единицы sRPE = минуты × RPE) ---------- */
 export const ACT_TYPES = {
-  run: { name: 'Бег', em: '🏃‍♀️', aerobic: true },
-  walk: { name: 'Ходьба', em: '🚶‍♀️', aerobic: true },
-  bike: { name: 'Велосипед', em: '🚴‍♀️', aerobic: true },
-  swim: { name: 'Плавание', em: '🏊‍♀️', aerobic: true },
+  run: { name: 'Бег', em: '🏃', aerobic: true },
+  walk: { name: 'Ходьба', em: '🚶', aerobic: true },
+  bike: { name: 'Велосипед', em: '🚴', aerobic: true },
+  swim: { name: 'Плавание', em: '🏊', aerobic: true },
   ellip: { name: 'Эллипс / степпер', em: '⛰️', aerobic: true },
-  stretch: { name: 'Растяжка / йога', em: '🧘‍♀️', aerobic: false },
+  stretch: { name: 'Растяжка / йога', em: '🧘', aerobic: false },
   other: { name: 'Другое', em: '✨', aerobic: true }
 };
 export function sessionLoad(sess) { return Math.round((sess.durationMin || 0) * (sess.rpe || 6)); }
@@ -420,6 +448,7 @@ export function weekReport(monday) {
   const measNow = meas.length ? meas[meas.length - 1] : null;
   const measPrev = measNow ? measurementBefore(measNow.date) : null;
   const load = rangeLoad(monday, end);
+  const extras = extrasBetween(monday, end);
 
   const dataDays = days.filter(d => hasFood(d) || Object.keys(s.daily[d] || {}).length).length;
   const complete = foodDays.length >= 5 && (finished || t === end);
@@ -437,13 +466,13 @@ export function weekReport(monday) {
   if (kcalOk >= 5) wins.push(`калории в норме ${kcalOk} ${plural(kcalOk, 'день', 'дня', 'дней')}`);
   if (protOk >= 5) wins.push(`белок в норме ${protOk} ${plural(protOk, 'день', 'дня', 'дней')}`);
   if (waterOk >= 4) wins.push(`вода в норме ${waterOk} ${plural(waterOk, 'день', 'дня', 'дней')}`);
-  if (ready.length) wins.push(`готова к прогрессии в ${ready.length} ${plural(ready.length, 'упражнении', 'упражнениях', 'упражнениях')}`);
+  if (ready.length) wins.push(`${g('готова', 'готов')} к прогрессии в ${ready.length} ${plural(ready.length, 'упражнении', 'упражнениях', 'упражнениях')}`);
   if (wDelta !== null && wDelta <= -0.1 && wDelta >= -0.7) wins.push(`средний вес −${fmt(Math.abs(wDelta), 1)} кг`);
 
   // одна маленькая цель на следующую неделю — по самому слабому месту
   const weak = [
     { k: 'train', v: wScore, goal: sess.length < 2 ? 'Сделать хотя бы 2 тренировки — пусть даже укороченные (первые 4 упражнения).' : 'Добавить третью тренировку — можно короткую, 40 минут.' },
-    { k: 'kcal', v: fScore, goal: 'Записывать питание каждый день — даже «примерно». Отметка «Съела по плану» — одно касание.' },
+    { k: 'kcal', v: fScore, goal: 'Записывать питание каждый день — даже «примерно». Отметка «' + g('Съела', 'Съел') + ' по плану» — одно касание.' },
     { k: 'prot', v: pScore, goal: 'Белок: добавить творог или яйца в перекус — это +20–25 г белка.' },
     { k: 'water', v: waterOk / 7, goal: 'Вода: начинать день со стакана воды и держать бутылку на смене.' }
   ].sort((a, b) => a.v - b.v);
@@ -457,7 +486,7 @@ export function weekReport(monday) {
     message = `Хорошая неделя${wins.length ? ': ' + wins.join(', ') : ''}. Есть над чем поработать, но направление верное.`;
   } else {
     message = hardContext
-      ? 'Неделя выдалась тяжёлой — смены, самочувствие или цикл. Это нормально, без самокритики. Возвращаемся к плану спокойно, с одной небольшой цели.'
+      ? 'Неделя выдалась тяжёлой — ' + g('смены, самочувствие или цикл', 'работа, сон или самочувствие') + '. Это нормально, без самокритики. Возвращаемся к плану спокойно, с одной небольшой цели.'
       : 'Эта неделя получилась слабее плана — без осуждения, такое бывает у всех. Не нужно «наверстывать», просто возьмём одну небольшую цель.';
   }
 
@@ -476,7 +505,7 @@ export function weekReport(monday) {
   return {
     monday, end, finished, complete, verdict, message, wins, goal: weak[0].goal, advice,
     sess, mobility, target, missedSessions, foodDays: foodDays.length, kcalOk, protOk, waterOk, steps, sleep, energy, mood,
-    shifts, sick, lutealDays, wNow, wPrev, wDelta, pains: [...new Set(pains)], ready, measNow, measPrev, load, dataDays
+    shifts, sick, lutealDays, wNow, wPrev, wDelta, pains: [...new Set(pains)], ready, measNow, measPrev, load, dataDays, extras
   };
 }
 
@@ -523,12 +552,13 @@ export function claudeReport(monday) {
   lines.push(`Вес (ср. за неделю): ${rep.wNow ? fmt(rep.wNow.avg, 1) + ' кг' : 'нет данных'}${rep.wDelta !== null ? ` (${rep.wDelta > 0 ? '+' : ''}${fmt(rep.wDelta, 1)} к прошлой неделе)` : ''}.`);
   if (rep.measNow) lines.push(`Замеры ${rep.measNow.date}: талия ${rep.measNow.waist}, грудь ${rep.measNow.chest}, бёдра ${rep.measNow.hips}.`);
   lines.push(`Сон ср.: ${rep.sleep ? fmt(rep.sleep, 1) : '—'} ч, шаги ср.: ${rep.steps ? fmt(rep.steps) : '—'}, энергия: ${rep.energy ? fmt(rep.energy, 1) : '—'}/5. Суток: ${rep.shifts}.`);
+  if (rep.extras.length) lines.push(`Сверх плана (${rep.extras.length}): ${rep.extras.map(x => `${x.date.slice(8)} — ${(EXTRA_CATS[x.cat] || EXTRA_CATS.other).name}${x.what ? ": " + x.what : ""} (${EXTRA_SIZES[x.size] || ""}${x.kcal ? ", " + x.kcal + " ккал" : ""})`).join("; ")}.`);
   if (rep.pains.length) lines.push(`Боль/дискомфорт: ${rep.pains.join(', ')}.`);
   lines.push(`Оценка приложения: ${rep.verdict}.`);
   const json = {
     app: 'fitapp', kind: 'weekly-report', version: 2, who: WHO, week: monday, programWeek: programWeek(monday),
     targets: s.targets, workWeights: s.workWeights, days: dayRows, sessions, activities: acts,
-    measurements: s.measurements.slice(-3), cycleKnown: !!s.cycle.lastStart
+    extras: rep.extras, measurements: s.measurements.slice(-3), cycleKnown: !!s.cycle.lastStart
   };
   return { text: lines.join('\n'), json, full: lines.join('\n') + '\n\nДАННЫЕ (JSON):\n' + JSON.stringify(json) };
 }
@@ -587,7 +617,7 @@ export function buildICS() {
   if (r.workout) {
     for (const [date, w] of Object.entries(s.planned)) {
       if (date < t || w === 'rest') continue;
-      add('w-' + date, dt(date, 17, 0), dt(date, 18, 15), `🏋️‍♀️ Тренировка ${w}`, WORKOUTS[w] ? WORKOUTS[w].name : 'Тренировка', null);
+      add('w-' + date, dt(date, 17, 0), dt(date, 18, 15), `🏋️ Тренировка ${w}`, WORKOUTS[w] ? WORKOUTS[w].name : 'Тренировка', null);
     }
   }
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//fitapp//RU', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Фитнес-дневник', ...ev, 'END:VCALENDAR'].join('\r\n');
