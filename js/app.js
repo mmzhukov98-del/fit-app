@@ -68,7 +68,7 @@ tabbar.addEventListener('click', e => {
   const tab = b.dataset.tab;
   const curTab = (currentPath || 'home').split('/')[0].split('?')[0];
   if (tab === curTab) { // повторное нажатие — к корню вкладки / вверх
-    if (currentPath !== tab) go(tab); else window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (currentPath !== tab) go(tab); else appEl.scrollTo({ top: 0, behavior: "smooth" });
   } else go(lastPathPerTab[tab] || tab);
 });
 
@@ -81,7 +81,7 @@ function render(opts = {}) {
   const depth = path.split('/').length;
   const sameRoute = path === currentPath;
   const anim = opts.keep || sameRoute ? '' : depth > prevDepth ? 'view-enter' : depth < prevDepth ? 'view-back' : 'view-fade';
-  const scrollY = sameRoute ? window.scrollY : 0;
+  const scrollY = sameRoute ? appEl.scrollTop : 0;
   prevDepth = depth;
   currentPath = path;
 
@@ -100,7 +100,7 @@ function render(opts = {}) {
   renderTabbar(tab);
   renderLivePill(tab, path);
   if (v.mount) try { v.mount(document.getElementById('view')); } catch (e) { console.error(e); }
-  window.scrollTo(0, scrollY);
+  appEl.scrollTop = scrollY;
   onScroll();
 }
 
@@ -122,9 +122,9 @@ function renderLivePill(tab, path) {
 
 function onScroll() {
   const nb = document.getElementById('navbar');
-  if (nb) nb.classList.toggle('scrolled', window.scrollY > 30);
+  if (nb) nb.classList.toggle("scrolled", appEl.scrollTop > 30);
 }
-window.addEventListener('scroll', onScroll, { passive: true });
+appEl.addEventListener("scroll", onScroll, { passive: true });
 
 appEl.addEventListener('click', e => {
   const b = e.target.closest('[data-nav-back]');

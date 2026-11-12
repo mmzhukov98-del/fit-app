@@ -257,7 +257,8 @@ function CardioReport(sess) {
   const info = sessionInfo(sess.workout, sess.week || 1);
   const km = sess.run && sess.run.km;
   const pace = km ? sess.durationMin / km : null;
-  const paceTxt = pace ? `${Math.floor(pace)}:${String(Math.round((pace % 1) * 60)).padStart(2, '0')}` : '—';
+  const paceSec = pace ? Math.round(pace * 60) : 0; // секунды на км, без «5:60» при округлении
+  const paceTxt = pace ? `${Math.floor(paceSec / 60)}:${String(paceSec % 60).padStart(2, '0')}` : '—';
   const prev = [...store.get().sessions].filter(x => x.workout === sess.workout && x.id !== sess.id && x.date <= sess.date).pop();
   const html = `
   <div class="page" style="padding-top:8px">

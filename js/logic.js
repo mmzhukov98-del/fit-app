@@ -255,7 +255,7 @@ export function planForDate(date) {
 }
 export function planTotals(date) {
   const plan = planForDate(date);
-  return sumM(Object.values(plan).flat().map(recipeTotals));
+  return sumM(Object.values(plan).flat().map(id => recipeTotals(id)));
 }
 
 export function targetsFor(date) {
