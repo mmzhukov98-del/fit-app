@@ -75,14 +75,23 @@ export function defaultState() {
 let state = null;
 const listeners = new Set();
 
+export let loadProblem = null;
 export function load() {
+  let raw = null;
   try {
-    const raw = localStorage.getItem(KEY);
+    raw = localStorage.getItem(KEY);
     if (raw) {
       state = migrate(JSON.parse(raw));
+      if (state && validateData(state)) { loadProblem = validateData(state); }
     }
   } catch (e) {
     console.warn('Не удалось прочитать данные', e);
+    state = null;
+  }
+  if (raw && !state) {
+    // данные повреждены: не затираем их молча — откладываем копию для восстановления
+    try { localStorage.setItem('fitapp.data.corrupt.' + Date.now(), raw); } catch (_) { /* нет места */ }
+    loadProblem = 'Сохранённые данные не прочитались. Их копия отложена в памяти браузера — напиши Claude, чтобы восстановить.';
   }
   if (!state) {
     state = defaultState();
@@ -134,20 +143,67 @@ export function update(fn, { silent = false } = {}) {
 
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
+// Снимок текущих данных перед восстановлением из файла — чтобы можно было вернуть как было
+const SNAP_KEY = 'fitapp.snapshot.beforeRestore';
+export function getSnapshotInfo() {
+  try { const raw = localStorage.getItem(SNAP_KEY); if (!raw) return null; const o = JSON.parse(raw); return { at: o.at, size: raw.length }; } catch (e) { return null; }
+}
+export function undoRestore() {
+  const raw = localStorage.getItem(SNAP_KEY);
+  if (!raw) throw new Error('Снимка нет');
+  const o = JSON.parse(raw);
+  const m = migrate(o.data);
+  if (!m) throw new Error('Снимок повреждён');
+  state = m;
+  persist();
+  localStorage.removeItem(SNAP_KEY);
+  listeners.forEach(l => l());
+}
+
 export function replaceAll(newState) {
-  const m = migrate(newState);
+  // глубокая копия, чтобы не держать ссылку на объект из файла
+  const m = migrate(JSON.parse(JSON.stringify(newState)));
   if (!m) throw new Error('Неверный формат файла');
+  const err = validateData(m);
+  if (err) throw new Error(err);
+  try { localStorage.setItem(SNAP_KEY, JSON.stringify({ at: new Date().toISOString(), data: state })); }
+  catch (e) { throw new Error('Не хватает памяти, чтобы сохранить страховочную копию. Сначала сделай резервную копию в файл.'); }
   state = m;
   persist();
   listeners.forEach(l => l());
 }
 
+const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Полная проверка структуры данных (после migrate, т.е. с заполненными по умолчанию полями)
+export function validateData(d) {
+  if (!isObj(d)) return 'Нет данных';
+  for (const k of ['profile', 'targets', 'settings', 'cycle', 'workWeights', 'planned', 'food', 'customFoods', 'daily', 'shopDone', 'dismissed']) if (!isObj(d[k])) return `Раздел «${k}» повреждён`;
+  for (const k of ['sessions', 'activities', 'measurements', 'measureFields', 'acceptedSuggestions']) if (!Array.isArray(d[k])) return `Раздел «${k}» повреждён`;
+  for (const k of ['kcal', 'protein', 'fat']) { const v = d.targets[k]; if (typeof v !== 'number' || !(v > 0 && v < 10000)) return 'Цели по КБЖУ повреждены'; }
+  if (typeof d.settings.programStart !== 'string' || !DATE.test(d.settings.programStart)) return 'Дата старта программы повреждена';
+  if (d.settings.who && !['her', 'him'].includes(d.settings.who)) return 'Неизвестный профиль';
+  for (const x of d.sessions) {
+    if (!isObj(x) || typeof x.date !== 'string' || !DATE.test(x.date) || typeof x.workout !== 'string' || !Array.isArray(x.exercises)) return 'Записи тренировок повреждены';
+    for (const e of x.exercises) if (!isObj(e) || !Array.isArray(e.sets) || !isObj(e.planned) || !Array.isArray(e.planned.reps)) return 'Подходы в тренировках повреждены';
+  }
+  for (const [dt, v] of Object.entries(d.daily)) if (!DATE.test(dt) || !isObj(v)) return 'Дневник дня повреждён';
+  for (const [dt, v] of Object.entries(d.food)) {
+    if (!DATE.test(dt) || !isObj(v) || (v.slots && !isObj(v.slots))) return 'Дневник питания повреждён';
+    for (const arr of Object.values(v.slots || {})) { if (!Array.isArray(arr)) return 'Дневник питания повреждён'; for (const e of arr) if (!isObj(e) || !Array.isArray(e.items)) return 'Записи питания повреждены'; }
+  }
+  for (const m of d.measurements) if (!isObj(m) || typeof m.date !== 'string' || !DATE.test(m.date)) return 'Замеры повреждены';
+  for (const a of d.activities) if (!isObj(a) || typeof a.date !== 'string' || !DATE.test(a.date)) return 'Активности повреждены';
+  if (d.active && (!isObj(d.active) || !Array.isArray(d.active.exercises))) return 'Активная тренировка повреждена';
+  return null;
+}
+
 export function validateBackup(obj) {
   if (!obj || typeof obj !== 'object') return 'Файл не похож на резервную копию';
-  if (obj.app !== 'fitapp' || !obj.data) return 'Это не резервная копия этого приложения';
-  const d = obj.data;
-  if (typeof d.profile !== 'object' || typeof d.sessions !== 'object') return 'В файле нет нужных разделов';
-  return null;
+  if (obj.app !== 'fitapp' || !isObj(obj.data)) return 'Это не резервная копия этого приложения';
+  if (typeof obj.schema === 'number' && obj.schema > SCHEMA) return 'Копия создана более новой версией приложения — сначала обнови приложение';
+  const m = migrate(JSON.parse(JSON.stringify(obj.data)));
+  return m ? validateData(m) : 'В файле нет нужных разделов';
 }
 
 export function backupObject() {

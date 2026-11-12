@@ -1,7 +1,7 @@
 // Service worker: офлайн-работа. Стратегия stale-while-revalidate —
 // приложение открывается мгновенно из кэша, а обновления (в т.ч. новая версия программы)
 // скачиваются в фоне и применяются при следующем открытии. Личные данные здесь не хранятся.
-const CACHE = 'fitapp-v4';
+const CACHE = 'fitapp-v5';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/store.js', './js/logic.js', './js/ui.js', './js/duel.js', './js/xlsx.js', './js/export-xlsx.js',

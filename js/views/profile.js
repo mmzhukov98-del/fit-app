@@ -6,7 +6,7 @@ import { today, fmtDate, fmtShort, addDays, mondayOf, weekDates, WD_SHORT, WD_LO
 import { PLAN_VERSION, CHANGELOG } from '../data/plan-meta.js';
 import { weighSheet, measureSheet, dailySheet, activitySheet } from './sheets.js';
 import { go } from '../app.js';
-import { myCard, shareText, decodeCard, compare, monthProgress, SCORE_RULES, duelScore } from '../duel.js';
+import { myCard, shareText, decodeCard, compare, monthProgress, SCORE_RULES, duelScore, partnerWeek, partnerWeeks } from '../duel.js';
 
 export const profileRoutes = [
   { re: /^profile$/, view: ProfileHome },
@@ -432,7 +432,8 @@ function DataView() {
     <div class="card"><div class="row between"><div><div class="muted small">Последняя копия</div><div style="font-weight:600">${s.settings.lastBackup ? fmtDate(s.settings.lastBackup.slice(0, 10), { year: true }) : 'ещё не делалась'}</div></div><div class="muted small">${fmt(size / 1024, 1)} КБ</div></div></div>
     <div class="list">
       <button class="li tap with-ic action" id="b-save"><div class="li-ic" style="background:var(--blue)">${icon('archive')}</div><div class="li-main"><div class="li-title">Сохранить резервную копию</div><div class="li-sub">JSON-файл — сохрани в «Файлы» или iCloud Drive</div></div></button>
-      <label class="li tap with-ic action" style="cursor:pointer"><div class="li-ic" style="background:var(--green)">${icon('refresh')}</div><div class="li-main"><div class="li-title">Восстановить из копии</div><div class="li-sub">Заменит текущие данные</div></div><input type="file" id="b-load" accept="application/json,.json" style="display:none"></label>
+      <label class="li tap with-ic action" style="cursor:pointer"><div class="li-ic" style="background:var(--green)">${icon('refresh')}</div><div class="li-main"><div class="li-title">Восстановить из копии</div><div class="li-sub">Заменит текущие данные (перед этим сохраняется страховочная копия)</div></div><input type="file" id="b-load" accept=".json,application/json,text/plain" style="display:none"></label>
+      ${store.getSnapshotInfo() ? `<button class="li tap with-ic action" id="b-undo"><div class="li-ic" style="background:var(--orange)">${icon('refresh')}</div><div class="li-main"><div class="li-title">Вернуть как было до восстановления</div><div class="li-sub">Страховочная копия от ${new Date(store.getSnapshotInfo().at).toLocaleString('ru-RU')}</div></div></button>` : ''}
     </div>
     <div class="list"><button class="li tap with-ic action" id="b-xlsx"><div class="li-ic" style="background:var(--green)">${icon('chart')}</div><div class="li-main"><div class="li-title">Excel-таблица системы</div><div class="li-sub">Программы обоих, меню на двоих, рецепты, цены, журналы и твои записи</div></div>${icon('share', 'chev')}</button></div>
     <div><div class="section-cap">Экспорт для таблиц (CSV)</div><div class="list">${Object.keys(csvExports()).map(n => `<button class="li tap with-ic action" data-csv="${n}"><div class="li-ic" style="background:var(--teal)">${icon('doc')}</div><div class="li-main li-title">${n}</div>${icon('share', 'chev')}</button>`).join('')}</div>
@@ -444,6 +445,11 @@ function DataView() {
     title: 'Данные', back: 'profile', backLabel: 'Профиль', large: false, html,
     mount: root => {
       root.querySelector('#b-save').addEventListener('click', doBackup);
+      const undo = root.querySelector('#b-undo');
+      if (undo) undo.addEventListener('click', async () => {
+        if (!(await confirmDialog('Вернуть прежние данные?', 'Данные из восстановленного файла будут заменены теми, что были до восстановления.', 'Вернуть'))) return;
+        try { store.undoRestore(); toast('Данные возвращены'); } catch (e) { await alertDialog({ title: 'Не получилось', text: String(e.message || e) }); }
+      });
       root.querySelector('#b-xlsx').addEventListener('click', async () => {
         const { buildSystemXlsx } = await import('../export-xlsx.js');
         downloadFile(`фитнес-система-${today()}.xlsx`, buildSystemXlsx(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -502,7 +508,7 @@ function DuelView(params = {}) {
   const defMon = wd >= 5 ? mondayOf(t) : mondayOf(addDays(t, -7));
   const mon = params.w || defMon;
   const mine = myCard(mon);
-  const theirs = ((s.partner || {}).weeks || {})[mon] || null;
+  const theirs = partnerWeek(mon);
   const res = theirs ? compare(mine, theirs) : null;
   const ym = mon.slice(0, 7);
   const mp = monthProgress(ym);
@@ -513,7 +519,7 @@ function DuelView(params = {}) {
     <div class="xs muted">${c.counted}/${c.target} трен. · еда ${c.foodOk}/7${c.streak ? ` · 🔥${c.streak}` : ''}</div>
     <div style="margin-top:8px" class="stack">${PARTS.map(([k, n, cl]) => `<div><div class="row between xs"><span class="muted">${n}</span><b>${c.parts[k]}%</b></div><div style="margin-top:2px">${bar(c.parts[k], 100, cl, null, 'thin')}</div></div>`).join('')}</div>
   </div>`;
-  const history = Object.values((s.partner || {}).weeks || {}).sort((a, b) => b.week.localeCompare(a.week)).slice(0, 8).map(c => { const m = myCard(c.week); const r = compare(m, c); return `<button class="li tap" data-wk="${c.week}"><div class="li-main"><div class="li-title" style="font-size:15px">Неделя с ${fmtDate(c.week)}</div><div class="li-sub">${esc(m.name)} ${m.score}% · ${esc(c.name)} ${c.score}%</div></div><span class="chip ${r.winner === 'me' ? 'green' : r.winner ? 'orange' : ''}">${r.winner === 'me' ? 'победа' : r.winner ? 'реванш!' : 'ничья'}</span></button>`; }).join('');
+  const history = partnerWeeks().sort((a, b) => b.week.localeCompare(a.week)).slice(0, 8).map(c => { const m = myCard(c.week); const r = compare(m, c); return `<button class="li tap" data-wk="${c.week}"><div class="li-main"><div class="li-title" style="font-size:15px">Неделя с ${fmtDate(c.week)}</div><div class="li-sub">${esc(m.name)} ${m.score}% · ${esc(c.name)} ${c.score}%</div></div><span class="chip ${r.winner === 'me' ? 'green' : r.winner ? 'orange' : ''}">${r.winner === 'me' ? 'победа' : r.winner ? 'реванш!' : 'ничья'}</span></button>`; }).join('');
   const html = `<div class="page">
     <div class="row between">
       <button class="nb-icon" data-nav="-7" aria-label="Предыдущая неделя">${icon('chevL')}</button>

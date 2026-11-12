@@ -1,6 +1,7 @@
 // Excel-файл системы: программы обоих, меню с двумя порциями, рецепты, продукты и цены, журналы + записи этого телефона.
 import { get } from './store.js';
 import { buildXlsx } from './xlsx.js';
+import { partnerWeeks } from './duel.js';
 import { PROGRAMS } from './data/program.js';
 import { EXERCISES } from './data/exercises.js';
 import { FOODS, RECIPES, WEEK_MENU, SLOTS, PICK, PRICE_SRC } from './data/foods.js';
@@ -58,7 +59,7 @@ export function buildSystemXlsx() {
   for (const m of s.measurements) meas.push([m.date, ...s.measureFields.map(f => m[f.id] ?? (m.extra || {})[f.id] ?? '')]);
   sheets['Замеры'] = meas;
   const duel = [['Неделя с', 'Партнёр', '% партнёра', 'Тренировки', 'Питание в норме', 'Серия']];
-  for (const c of Object.values((s.partner || {}).weeks || {})) duel.push([c.week, c.name, c.score, `${c.counted}/${c.target}`, c.foodOk, c.streak]);
+  for (const c of partnerWeeks()) duel.push([c.week, c.name, c.score, `${c.counted}/${c.target}`, c.foodOk, c.streak]);
   sheets['Дуэль'] = duel;
   return buildXlsx(sheets);
 }

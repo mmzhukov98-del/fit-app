@@ -86,7 +86,9 @@ function render(opts = {}) {
   currentPath = path;
 
   if (current && current.unmount) try { current.unmount(); } catch (e) { console.error(e); }
-  const v = m.route.view(...m.args, m.params);
+  let v;
+  try { v = m.route.view(...m.args, m.params); }
+  catch (e) { console.error(e); v = errorView(e, path); }
   current = v;
   const backBtn = v.back ? `<button class="nb-back" data-nav-back="${esc(v.back)}">${icon('back')}<span>${esc(v.backLabel || 'Назад')}</span></button>` : '<span></span>';
   const right = v.right || '<span></span>';
@@ -103,6 +105,28 @@ function render(opts = {}) {
   appEl.scrollTop = scrollY;
   onScroll();
 }
+
+// Экран ошибки вместо белого экрана: данные не трогаем, предлагаем сохранить копию
+function errorView(e, path) {
+  const msg = String((e && e.message) || e).slice(0, 300);
+  return {
+    title: 'Что-то пошло не так', large: false, back: 'home', backLabel: 'Главная',
+    html: `<div class="page" style="padding-top:12px">
+      <div class="card"><div style="font-size:40px">🛟</div><b style="display:block;font-size:18px;margin-top:6px">Этот экран не открылся</b>
+      <p class="small muted" style="margin-top:6px;line-height:1.45">Твои записи не удалены. На всякий случай сохрани резервную копию и напиши Claude, что произошло — приложи текст ошибки.</p>
+      <div class="sugg info" style="font-family:ui-monospace,monospace;font-size:12px;word-break:break-word">${esc(path)}: ${esc(msg)}</div></div>
+      <button class="btn" id="err-backup">${icon('archive')} Сохранить резервную копию</button>
+      <button class="btn gray" data-go="home">На главную</button></div>`,
+    mount: root => root.querySelector('#err-backup').addEventListener('click', async () => {
+      const { doBackup } = await import('./views/profile.js');
+      doBackup();
+    })
+  };
+}
+
+// Глобальные ошибки (например, в обработчике нажатия) — не теряем, показываем подсказку
+window.addEventListener('error', ev => console.error('Ошибка:', ev.message));
+window.addEventListener('unhandledrejection', ev => console.error('Ошибка:', ev.reason));
 
 function renderLivePill(tab, path) {
   let pill = document.getElementById('live-pill');
@@ -144,6 +168,7 @@ document.addEventListener('focusin', e => {
 applyTheme();
 if (!location.hash) location.replace('#/home');
 render();
+if (store.loadProblem) setTimeout(() => import('./ui.js').then(u => u.alertDialog({ title: 'Проблема с данными', text: store.loadProblem })), 600);
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('./sw.js').then(reg => {

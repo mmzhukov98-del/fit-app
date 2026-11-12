@@ -60,9 +60,35 @@ export function decodeCard(text) {
   const i = t.indexOf(PREFIX);
   if (i < 0) throw new Error('Не найден код дуэли (он начинается с FITDUEL1:)');
   const raw = t.slice(i + PREFIX.length).split(/\s/)[0];
-  const card = JSON.parse(decodeURIComponent(escape(atob(raw))));
-  if (!card || card.v !== 1 || !card.week || typeof card.score !== 'number') throw new Error('Код повреждён');
+  if (raw.length > 8000) throw new Error('Код слишком длинный — похоже, он повреждён');
+  let obj;
+  try { obj = JSON.parse(decodeURIComponent(escape(atob(raw)))); } catch (e) { throw new Error('Код повреждён — скопируй его целиком'); }
+  const card = sanitizeCard(obj);
+  if (!card) throw new Error('Код повреждён или от другой версии приложения');
   return card;
+}
+
+// Строгая проверка кода партнёра: принимаем только ожидаемые поля и диапазоны,
+// всё остальное отбрасываем. Защищает экран дуэли от повреждённых или подделанных кодов.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const int = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : null);
+export function sanitizeCard(c) {
+  if (!c || typeof c !== 'object' || c.v !== 1) return null;
+  if (typeof c.week !== 'string' || !DATE_RE.test(c.week) || Number.isNaN(Date.parse(c.week))) return null;
+  if (!['her', 'him'].includes(c.who)) return null;
+  const score = int(c.score, 0, 100);
+  if (score === null) return null;
+  const parts = {};
+  for (const k of ['t', 'f', 'sw', 'rec']) { const v = int((c.parts || {})[k], 0, 100); if (v === null) return null; parts[k] = v; }
+  const counted = int(c.counted, 0, 50), target = int(c.target, 1, 50), foodOk = int(c.foodOk, 0, 7);
+  if (counted === null || target === null || foodOk === null) return null;
+  const days = Array.isArray(c.days) ? c.days.slice(0, 7).filter(d => d && typeof d.d === 'string' && DATE_RE.test(d.d)).map(d => ({
+    d: d.d,
+    train: Array.isArray(d.train) ? d.train.filter(x => ['gym', 'run', 'bike'].includes(x)).slice(0, 5) : [],
+    food: d.food ? 1 : 0
+  })) : [];
+  const name = typeof c.name === 'string' ? c.name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 30) : '';
+  return { v: 1, who: c.who, name: name || (c.who === 'him' ? 'Он' : 'Она'), week: c.week, score, parts, counted, target, foodOk, mob: int(c.mob, 0, 14) ?? 0, streak: int(c.streak, 0, 520) ?? 0, days };
 }
 
 export function shareText(card) {
@@ -96,7 +122,7 @@ export function monthProgress(ym) {
   const mineSess = s.sessions.filter(x => x.date.startsWith(ym) && isTraining(x)).length;
   const mineFood = Object.keys(s.daily).concat(Object.keys(s.food)).filter((d, i, a) => a.indexOf(d) === i && d.startsWith(ym) && foodAdherence(d).ok).length;
   let theirSess = 0, theirFood = 0;
-  for (const c of Object.values((s.partner || {}).weeks || {})) {
+  for (const c of partnerWeeks()) {
     for (const d of c.days || []) {
       if (!d.d.startsWith(ym)) continue;
       theirSess += (d.train || []).length;
@@ -104,6 +130,14 @@ export function monthProgress(ym) {
     }
   }
   return { sess: mineSess + theirSess, food: mineFood + theirFood, goalSess: goal.goalWorkouts || 30, goalFood: goal.goalFoodDays || 45, mineSess, theirSess, mineFood, theirFood };
+}
+
+// Сохранённые итоги партнёра — только прошедшие проверку
+export function partnerWeeks() {
+  return Object.values((get().partner || {}).weeks || {}).map(sanitizeCard).filter(Boolean);
+}
+export function partnerWeek(monday) {
+  return sanitizeCard(((get().partner || {}).weeks || {})[monday]);
 }
 
 export const SCORE_RULES = [
