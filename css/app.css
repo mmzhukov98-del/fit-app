@@ -566,7 +566,8 @@ body.has-pill #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 96px
 
 
 /* --- плавность и разгрузка (14.11) --- */
-button, a, .tap, input, label { touch-action: manipulation; }
+/* двойное касание не приближает экран (iOS); прокрутка и приближение двумя пальцами остаются */
+html, body, *, *::before, *::after { touch-action: manipulation; }
 .quick-row { display: flex; gap: 10px; }
 .quick-row .btn { flex: 1; }
 .check.on { animation: check-pop 0.28s cubic-bezier(0.3, 0.7, 0.4, 1.4); }
