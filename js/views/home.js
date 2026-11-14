@@ -3,7 +3,7 @@ import * as store from '../store.js';
 import { icon, rings, bar, esc } from '../ui.js';
 import { today, fmtDate, programInfo, nextWorkoutId, sessionsOn, targetsFor, dayFact, planTotals, dayRings, dayLoad, dueReminders,
   weekDates, mondayOf, WD_SHORT, rangeLoad, weekTarget, scheduledOn, fmt, hasFood, foodAdherence, dayLog, planForDate, weekAvgWeight, addDays, plural } from '../logic.js';
-import { WORKOUTS, sessionInfo, MODE } from '../data/program.js';
+import { WORKOUTS, sessionInfo, MODE, TOTAL_WEEKS } from '../data/program.js';
 import { RECIPES, SLOTS } from '../data/foods.js';
 import { PLAN_VERSION, CHANGELOG } from '../data/plan-meta.js';
 import { weighSheet, dailySheet, measureSheet, activitySheet } from './sheets.js';
@@ -161,7 +161,7 @@ function Home() {
       <button class="card tap" data-act="activity" style="text-align:left"><div class="card-h"><span class="ic" style="background:var(--c-cardio)">${icon('run')}</span>Кардио</div><div class="mid-num">Добавить</div></button>
     </div>
 
-    <div class="note" style="text-align:center">${pi.notStarted ? `Программа начнётся ${fmtDate(s.settings.programStart)}` : pi.done ? 'Программа на 10 недель завершена — сделай замеры и отправь отчёт Claude для следующего цикла' : `Неделя ${pi.week} из 10 · ${esc(pi.phase.name)} · запас повторов ${esc(pi.phase.rir)}`}</div>
+    <div class="note" style="text-align:center">${pi.notStarted ? `Программа начнётся ${fmtDate(s.settings.programStart)}` : pi.done ? `Программа на ${TOTAL_WEEKS} недель завершена — сделай замеры и отправь отчёт Claude для следующего цикла` : `Неделя ${pi.week} из ${TOTAL_WEEKS} · ${esc(pi.phase.name)} · запас повторов ${esc(pi.phase.rir)}`}</div>
   </div>`;
 
   return {
