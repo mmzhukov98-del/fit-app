@@ -44,18 +44,18 @@ function FoodDiary(params = {}) {
     const pk = ids.reduce((a, id) => a + recipeTotals(id).kcal, 0);
     const allEaten = ids.length && ids.every(id => entries.some(e => e.recipeId === id));
     return `<div class="card meal-card">
-      <div class="meal-h"><span class="em">${sl.em}</span><div><b>${sl.name}</b><div class="xs muted">${esc(sl.hint)}</div></div>
+      <div class="meal-h"><span class="em">${sl.em}</span><div><b>${sl.name}</b></div>
         <div class="meal-kcal">${entries.length ? fmt(sf.kcal) : '—'}<small> / ${fmt(pk)} ккал</small></div></div>
       ${ids.map(id => {
         const r = RECIPES[id], rt = recipeTotals(id);
-        const eaten = entries.some(e => e.recipeId === id);
-        return `<div class="plan-dish">
+        const eaten = entries.find(e => e.recipeId === id);
+        return `<div class="plan-dish" data-key="${id}">
           <button class="dish-em" style="background:${r.bg}" data-go="food/recipe/${id}" aria-label="Рецепт">${r.em}</button>
-          <button class="grow" style="text-align:left" data-go="food/recipe/${id}"><b>${esc(r.name)}</b><span>${fmt(rt.kcal)} ккал · Б ${fmt(rt.p)} · Ж ${fmt(rt.f)} · У ${fmt(rt.c)}</span></button>
-          ${eaten ? `<span class="check on">${icon('check')}</span>` : `<button class="btn tiny" data-eat="${sl.id}:${id}">${g('Съела', 'Съел')}</button>`}
+          <button class="grow" style="text-align:left" data-go="food/recipe/${id}"><b>${esc(r.name)}</b><span>${eaten ? `${fmt(entryTotals(eaten).kcal)} ккал · записано` : `${fmt(rt.kcal)} ккал · Б ${fmt(rt.p)} · Ж ${fmt(rt.f)} · У ${fmt(rt.c)}`}</span></button>
+          ${eaten ? `<button class="check on" data-edit="${sl.id}:${eaten.id}" aria-label="Изменить запись">${icon('check')}</button>` : `<button class="btn tiny" data-eat="${sl.id}:${id}">${g('Съела', 'Съел')}</button>`}
         </div>`;
       }).join('')}
-      ${entries.filter(e => !ids.includes(e.recipeId) || !e.recipeId || true).length ? `<div style="margin-top:10px">${entries.map(e => { const et = entryTotals(e); return `<button class="entry" style="width:100%;text-align:left" data-edit="${sl.id}:${e.id}"><div class="grow"><b>${esc(e.name)}</b><span>${e.items.map(i => `${esc(i.name)} ${fmt(i.g)} г`).join(', ')}</span></div><div class="k">${fmt(et.kcal)}</div>${icon('chev', 'chev')}</button>`; }).join('')}</div>` : ''}
+      ${entries.filter(e => !ids.includes(e.recipeId)).length ? `<div style="margin-top:10px">${entries.filter(e => !ids.includes(e.recipeId)).map(e => { const et = entryTotals(e); return `<button class="entry" style="width:100%;text-align:left" data-edit="${sl.id}:${e.id}"><div class="grow"><b>${esc(e.name)}</b><span>${e.items.map(i => `${esc(i.name)} ${fmt(i.g)} г`).join(', ')}</span></div><div class="k">${fmt(et.kcal)}</div>${icon('chev', 'chev')}</button>`; }).join('')}</div>` : ''}
       <div class="row" style="gap:16px">
         <button class="add-line" data-add="${sl.id}">${icon('plusCircle')} Записать</button>
         ${ids.length ? `<button class="add-line" data-swap="${sl.id}" style="color:var(--label-2)">${icon('refresh')} Заменить</button>` : ''}
@@ -75,7 +75,6 @@ function FoodDiary(params = {}) {
           <div class="row between small"><span class="muted">Цель</span><b class="num">${fmt(tg.kcal)}</b></div>
           <div class="row between small" style="margin-top:4px"><span class="muted">Съедено</span><b class="num" style="color:var(--c-kcal)">${fmt(f.kcal)}</b></div>
           <div class="row between small" style="margin-top:4px"><span class="muted">По плану</span><b class="num">${fmt(pTot.kcal)}</b></div>
-          <div class="row between small" style="margin-top:4px"><span class="muted">Клетчатка</span><b class="num">${fmt(f.fib)}/${tg.fib} г</b></div>
         </div>
       </div>
       <div class="grid3" style="margin-top:14px">
@@ -86,19 +85,17 @@ function FoodDiary(params = {}) {
     </div>
 
     <div class="card">
-      <div class="card-h"><span class="ic" style="background:var(--c-water)">${icon('drop')}</span>Вода<span class="right">${fmt(water * 0.25, 2)} / ${fmt(tg.waterMl / 1000, 1)} л</span></div>
+      <div class="card-h"><span class="ic" style="background:var(--c-water)">${icon('drop')}</span>Вода <span class="xs muted" style="font-weight:400">· стакан 250 мл</span><span class="right">${fmt(water * 0.25, 2)} / ${fmt(tg.waterMl / 1000, 1)} л</span></div>
       <div class="water" id="water">${Array.from({ length: glasses }, (_, i) => `<button class="${i < water ? 'on' : ''}" data-w="${i + 1}" aria-label="${i + 1} стакан"></button>`).join('')}</div>
-      <div class="xs muted" style="margin-top:8px">1 стакан = 250 мл. Нажми на стакан, чтобы отметить.</div>
     </div>
 
     ${slotsHtml}
 
-    <div class="card">
-      <div class="card-h"><span class="ic" style="background:var(--orange)">🍕</span>Сверх плана<span class="right">${(log.extras || []).length ? `${(log.extras || []).length} шт.` : 'ничего'}</span></div>
-      ${(log.extras || []).length ? (log.extras || []).map(x => `<button class="entry" style="width:100%;text-align:left" data-extra="${esc(x.id)}"><span style="font-size:20px">${(EXTRA_CATS[x.cat] || EXTRA_CATS.other).em}</span><div class="grow"><b>${esc(x.what || (EXTRA_CATS[x.cat] || EXTRA_CATS.other).name)}</b><span>${esc((EXTRA_CATS[x.cat] || EXTRA_CATS.other).name)} · ${EXTRA_SIZES[x.size] || ''}${x.kcal ? ` · ${fmt(x.kcal)} ккал` : ' · ккал не известны'}</span></div>${icon('chev', 'chev')}</button>`).join('')
-        : '<div class="muted small" style="line-height:1.4">Если было что-то лишнее — запиши, даже без калорий. Это не для самокритики: в недельном отчёте Claude оценит неделю целиком.</div>'}
+    ${(log.extras || []).length ? `<div class="card">
+      <div class="card-h"><span class="ic" style="background:var(--orange)">🍕</span>Сверх плана<span class="right">${(log.extras || []).length} шт.</span></div>
+      ${(log.extras || []).map(x => `<button class="entry" style="width:100%;text-align:left" data-extra="${esc(x.id)}"><span style="font-size:20px">${(EXTRA_CATS[x.cat] || EXTRA_CATS.other).em}</span><div class="grow"><b>${esc(x.what || (EXTRA_CATS[x.cat] || EXTRA_CATS.other).name)}</b><span>${esc((EXTRA_CATS[x.cat] || EXTRA_CATS.other).name)} · ${EXTRA_SIZES[x.size] || ''}${x.kcal ? ` · ${fmt(x.kcal)} ккал` : ' · ккал не известны'}</span></div>${icon('chev', 'chev')}</button>`).join('')}
       <button class="add-line" data-extra-add="1">${icon('plusCircle')} Добавить</button>
-    </div>
+    </div>` : `<button class="btn gray small" data-extra-add="1" style="width:100%">🍕 Было что-то сверх плана?</button>`}
 
     <div class="list">
       <button class="li tap with-ic" data-go="food/menu"><div class="li-ic" style="background:var(--tint)">${icon('calendar')}</div><div class="li-main li-title">Меню на 7 дней</div>${icon('chev', 'chev')}</button>
@@ -207,12 +204,12 @@ function MenuView() {
   const t = today();
   const cur = menuIndex(t);
   const html = `<div class="page">
-    <div class="note">День 1 = первый день программы, дальше меню идёт по кругу. Сегодня — день ${cur + 1}. Любое блюдо можно заменить в дневнике на другое из того же приёма пищи.</div>
+    <div class="note">Простые блюда из двух коротких готовок (Вс и Ср) и одно «блюдо недели» в субботу. Любое блюдо можно заменить в дневнике.</div>
     ${WEEK_MENU.map((day, i) => {
       const ids = Object.values(day).flat();
       const tot = ids.reduce((a, id) => { const r = recipeTotals(id); return { kcal: a.kcal + r.kcal, p: a.p + r.p, f: a.f + r.f, c: a.c + r.c }; }, { kcal: 0, p: 0, f: 0, c: 0 });
-      return `<div><div class="section-h"><h2>День ${i + 1}${i === cur ? ' · сегодня' : ''}</h2><span class="muted small">${fmt(tot.kcal)} ккал · Б ${fmt(tot.p)}</span></div>
-      <div class="list">${SLOTS.filter(sl => day[sl.id]).map(sl => day[sl.id].map(id => { const r = RECIPES[id], rt = recipeTotals(id); return `<button class="li tap" data-go="food/recipe/${id}"><div class="li-ic" style="background:${r.bg};font-size:20px">${r.em}</div><div class="li-main"><div class="li-sub" style="margin:0">${sl.name}</div><div class="li-title" style="font-size:16px">${esc(r.name)}</div><div class="li-sub">${fmt(rt.kcal)} ккал · Б ${fmt(rt.p)} · Ж ${fmt(rt.f)} · У ${fmt(rt.c)}</div></div>${icon('chev', 'chev')}</button>`; }).join('')).join('')}</div>
+      return `<div><div class="section-h"><h2>${['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'][i]}${i === cur ? ' · сегодня' : ''}</h2><span class="muted small">${fmt(tot.kcal)} ккал · Б ${fmt(tot.p)}</span></div>
+      <div class="list">${SLOTS.filter(sl => day[sl.id]).map(sl => day[sl.id].map(id => { const r = RECIPES[id], rt = recipeTotals(id); return `<button class="li tap" data-go="food/recipe/${id}"><div class="li-ic" style="background:${r.bg};font-size:20px">${r.em}</div><div class="li-main"><div class="li-sub" style="margin:0">${sl.name}</div><div class="li-title" style="font-size:16px">${esc(r.name)}${r.special ? ' <span class="chip orange" style="font-size:11px">⭐ блюдо недели</span>' : ''}</div><div class="li-sub">${fmt(rt.kcal)} ккал · Б ${fmt(rt.p)}${r.time && !r.sweet ? ` · ⏱ ${r.time} мин` : ''}</div></div>${icon('chev', 'chev')}</button>`; }).join('')).join('')}</div>
       <div class="section-foot">Ж ${fmt(tot.f)} г · У ${fmt(tot.c)} г. В дни суток добавляется перекус ~215 ккал; в неделю перед менструацией — +100–150 ккал крупой или фруктом.</div></div>`;
     }).join('')}
   </div>`;
@@ -230,7 +227,7 @@ function RecipeView(id) {
   const slot = SLOTS.find(s => s.id === r.slot);
   const html = `<div class="page">
     <div class="dish-hero" style="background:${r.bg}">${r.em}</div>
-    <div class="chips"><span class="chip">${esc(slot ? slot.name : '')}</span>${r.time ? `<span class="chip">⏱ ${r.time} мин</span>` : ''}${r.prep ? `<span class="chip green">Можно заготовить на ${r.prep} дн.</span>` : ''}</div>
+    <div class="chips"><span class="chip">${esc(slot ? slot.name : '')}</span>${r.special ? '<span class="chip orange">⭐ Блюдо недели</span>' : ''}${r.time ? `<span class="chip">⏱ ${r.time} мин</span>` : ''}${r.prep ? `<span class="chip green">Можно заготовить на ${r.prep} дн.</span>` : ''}</div>
     <div class="kv">
       <div><div class="k">Ккал</div><div class="v" style="color:var(--c-kcal)">${fmt(t.kcal)}</div></div>
       <div><div class="k">Белки</div><div class="v" style="color:var(--c-protein)">${fmt(t.p)} г</div></div>
@@ -305,7 +302,7 @@ function ShopView() {
     ${FOOD_CATS.filter(c => byCat[c]).map(c => `<div><div class="section-cap">${esc(c)}</div><div class="list">${byCat[c].map(x => `<div class="shop-item ${s.shopDone[x.fid] ? 'done' : ''}">
       <button data-shop="${x.fid}" aria-label="Отметить"><span class="check ${s.shopDone[x.fid] ? 'on' : ''}">${s.shopDone[x.fid] ? icon('check') : ''}</span></button>
       <div class="grow"><div>${esc(x.f.name)}</div>
-        <button class="xs ${x.own ? 'ok' : 'muted'}" data-price="${x.fid}" style="text-decoration:underline dotted">≈ ${x.price} ₽ · ${fmt(x.perKg)} ₽/кг${x.own ? ' (моя цена)' : PRICE_SRC[x.fid] ? ' · Магнит ✓' : ' · не проверено'}</button>
+        <button class="xs ${x.own ? 'ok' : 'muted'}" data-price="${x.fid}" style="text-decoration:underline dotted">${x.perKg ? `≈ ${x.price} ₽ · ${fmt(x.perKg)} ₽/кг${x.own ? ' (моя цена)' : PRICE_SRC[x.fid] ? ' · Магнит ✓' : ' · не проверено'}` : 'цена не указана — впиши из чека'}</button>
         ${!x.own && PRICE_SRC[x.fid] ? `<div class="xs muted">${esc(PRICE_SRC[x.fid])}</div>` : ''}
         ${PICK[x.fid] ? `<details style="margin-top:2px"><summary class="xs tint" style="cursor:pointer">Как выбрать</summary><div class="xs muted" style="line-height:1.4;margin-top:4px">${esc(PICK[x.fid])}</div></details>` : ''}</div>
       <b class="num">${x.buy}</b></div>`).join('')}</div></div>`).join('')}
@@ -320,7 +317,7 @@ function ShopView() {
       if (pr) {
         const fid = pr.dataset.price;
         const cur = (store.get().prices || {})[fid] || FOODS[fid].price;
-        const v = prompt(`Цена за 1 кг: ${FOODS[fid].name}\n(пусто — вернуть ориентир)`, String(cur));
+        const v = prompt(`Цена за 1 кг: ${FOODS[fid].name}\n(пусто — вернуть ориентир)`, cur ? String(cur) : '');
         if (v === null) return;
         const n = parseFloat(String(v).replace(',', '.'));
         store.update(st => { st.prices = st.prices || {}; if (!v.trim() || Number.isNaN(n)) delete st.prices[fid]; else st.prices[fid] = n; });
@@ -335,12 +332,13 @@ function ShopView() {
 function GuideView() {
   const two = cookForTwo();
   // что закупить и отвесить на каждую готовку (основные блюда, которые заготавливаются заранее)
-  const prepRids = days => days.flatMap(i => Object.values(WEEK_MENU[i]).flat()).filter(rid => RECIPES[rid].prep > 0);
-  const needList = days => Object.entries(needFor(prepRids(days), two)).sort((a, b) => b[1] - a[1]).map(([fid, g]) => `<div class="ing"><span>${esc(FOODS[fid].name)}</span><span class="g"><b>${fmt(Math.round(g / 5) * 5)} г</b></span></div>`).join('');
+  // для готовки — блюда тех приёмов пищи, которые она закрывает
+  const prepRids = meals => meals.flatMap(([d, sl]) => WEEK_MENU[d][sl] || []);
+  const needList = meals => Object.entries(needFor(prepRids(meals), two)).sort((a, b) => b[1] - a[1]).map(([fid, g]) => `<div class="ing"><span>${esc(FOODS[fid].name)}</span><span class="g"><b>${fmt(Math.round(g / 5) * 5)} г</b></span></div>`).join('');
   const html = `<div class="page">
     <div class="toggle-row card"><div><b>Готовим на двоих</b><div class="xs muted" style="line-height:1.4;margin-top:2px">${two ? 'Вкл: заготовки и граммовки в рецептах — на двоих (её порция + его ×1,35). Готовая еда делится по весу: ей ≈ 43%, ему ≈ 57%.' : `Выкл: всё считается только на ${WHO === 'him' ? 'твою порцию (×1,35)' : 'твою порцию'}.`}</div></div>${sw('cook2', two)}</div>
     ${PREP_PLAN.map((p, i) => `<div><div class="section-cap">${esc(p.name)}</div><div class="card"><div class="muted small" style="margin-bottom:6px">${esc(p.when)}</div><ol class="ol">${p.tasks.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
-      <details style="margin-top:8px"><summary class="tint small" style="cursor:pointer;font-weight:600">Сколько отвесить (сырой вес) — ${two ? 'на двоих' : 'на тебя'}</summary><div style="margin-top:6px">${needList(i === 0 ? [0, 1, 2] : [3, 4, 5, 6])}</div></details></div></div>`).join('')}
+      <details style="margin-top:8px"><summary class="tint small" style="cursor:pointer;font-weight:600">Сколько отвесить (сырой вес) — ${two ? 'на двоих' : 'на тебя'}</summary><div style="margin-top:6px">${needList(p.meals)}</div></details></div></div>`).join('')}
     <div><div class="section-cap">Рекомендации</div><div class="stack">${COOKING_GUIDE.map(g => `<div class="card"><b>${esc(g.t)}</b><p class="prose muted" style="margin-top:4px;font-size:15px">${esc(g.d)}</p></div>`).join('')}</div></div>
     <div><div class="section-cap">Сырой → готовый вес</div><div class="list">${Object.values(FOODS).filter(f => f.yield && f.yield !== 1).map(f => `<div class="li"><div class="li-main"><div class="li-title" style="font-size:15px">${esc(f.name)}</div></div><span class="li-val num">×${String(f.yield).replace('.', ',')}</span></div>`).join('')}</div>
     <div class="section-foot">Например: 60 г сухих макарон × 2,3 ≈ 140 г готовых; 150 г сырой курицы × 0,7 ≈ 105 г готовой.</div></div>

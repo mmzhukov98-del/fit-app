@@ -42,23 +42,18 @@ function TrainHome() {
       <span class="chip ${pi.phase.deload ? 'orange' : 'green'}">RIR ${esc(pi.phase.rir)}</span></div>
       <div class="muted small" style="margin-top:6px">${esc(pi.phase.desc)}</div>
       <div class="row" style="gap:4px;margin-top:12px">${Array.from({ length: TOTAL_WEEKS }, (_, i) => { const w = i + 1; const ph = PHASES.find(p => w >= p.from && w <= p.to); const c = ph.deload ? 'var(--orange)' : w <= 3 ? 'var(--teal)' : w <= 6 ? 'var(--green)' : 'var(--tint)'; return `<div style="flex:1;height:6px;border-radius:3px;background:${c};opacity:${w <= pi.week ? 1 : 0.25}"></div>`; }).join('')}</div>
-      <div class="row between xs muted" style="margin-top:6px"><span>Техника</span><span>Рост</span><span>Разгрузка</span><span>Развитие</span></div>
+      <div class="row between xs muted" style="margin-top:6px;flex-wrap:wrap;column-gap:6px"><span>Техника</span><span>Рост</span><span>Разгрузка</span><span>Развитие</span></div>
     </div>
 
-    <div class="card">
-      <div class="card-h"><span class="ic" style="background:var(--tint)">${icon('calendar')}</span>Расписание недели</div>
-      <div class="week-strip">${WD_SHORT.map((d, i) => { const k = Object.keys(HER_DAYS).find(x => HER_DAYS[x] === i); return `<div class="ws-day ${k ? '' : ''}"><span class="wd">${d}</span><span class="d" style="${k ? `background:${WORKOUTS[k].color};color:#fff;font-weight:800` : 'color:var(--label-3)'}">${k || '·'}</span></div>`; }).join('')}</div>
-      <div class="xs muted" style="margin-top:6px;line-height:1.4">${esc(DAY_NOTE.her)}</div>
-    </div>
     <div>
       <div class="section-h"><h2>Следующая</h2><span class="muted small">на этой неделе ${weekSess.length}/${s.targets.workoutsPerWeek}</span></div>
       ${workoutCard(nextW, true)}
     </div>
 
     <div>
-      <div class="section-h"><h2>Программа</h2></div>
+      <div class="section-h"><h2>Программа</h2><span class="muted small">${Object.values(HER_DAYS).map(i => WD_SHORT[i]).join(' · ')}</span></div>
       <div class="stack">${ORDER.filter(w => w !== nextW).map(w => workoutCard(w)).join('')}</div>
-      <div class="section-foot">Порядок по кругу: A → B → C. Между тренировками минимум день отдыха. После суток — не тренироваться.</div>
+      <div class="section-foot">${esc(DAY_NOTE.her)}</div>
     </div>
 
     <div class="list">
@@ -168,7 +163,7 @@ function TrainHomeWeekly() {
       <span class="chip ${pi.phase.deload ? 'orange' : 'green'}">RIR ${esc(pi.phase.rir)}</span></div>
       <div class="muted small" style="margin-top:6px;line-height:1.4">${esc(pi.phase.desc)}</div>
       <div class="row" style="gap:3px;margin-top:12px">${Array.from({ length: TOTAL_WEEKS }, (_, i) => { const w = i + 1; const ph = PHASES.find(p => w >= p.from && w <= p.to); const c = ph.deload ? 'var(--orange)' : w <= 4 ? 'var(--teal)' : w === 12 ? 'var(--purple)' : 'var(--green)'; return `<div style="flex:1;height:6px;border-radius:3px;background:${c};opacity:${w <= pi.week ? 1 : 0.25}"></div>`; }).join('')}</div>
-      <div class="row between xs muted" style="margin-top:6px"><span>Возвращение</span><span>Основной</span><span>Разгр.</span><span>Основной</span><span>Контроль</span></div>
+      <div class="row between xs muted" style="margin-top:6px;flex-wrap:wrap;column-gap:6px"><span>Возвращение</span><span>Основной</span><span>Разгр.</span><span>Основной</span><span>Контроль</span></div>
     </div>
 
     <div>
@@ -178,14 +173,14 @@ function TrainHomeWeekly() {
         <div class="li-main"><div class="li-title" style="font-size:16px">${esc(p.kind === 'strength' ? p.info.name : p.info.name)}${p.optional ? ' <span class="xs muted">по желанию</span>' : ''}</div>
         <div class="li-sub"><b class="tint">${p.day !== undefined ? WD_SHORT[p.day] : ''}</b> · ${p.kind === 'strength' ? `~${p.info.duration} мин · ${(p.info.items || []).length} упражнений` : `${esc(p.info.minText || '')} мин${p.info.quality ? ' · интенсивная' : p.info.long ? ' · длительная' : ''}`}</div></div>
         <span class="check ${p.done ? 'on' : ''}">${p.done ? icon('check') : ''}</span></button>`).join('')}</div>
-      <div class="section-foot">${esc(DAY_NOTE.him)} Две тренировки в день — утром бег, вечером зал.</div>
+      <div class="section-foot">Дни можно сдвигать, но A — никогда накануне интенсивной или длительной. Две тренировки в день — утром бег, вечером зал.</div>
     </div>
 
-    <div class="card">
-      <div class="card-h"><span class="ic" style="background:var(--tint)">🏁</span>Сезон<span class="right">${esc(curSeason.name)}</span></div>
-      <ul class="ul">${SEASON.map(x => `<li style="${t >= x.from && t <= x.to ? 'font-weight:600' : ''}"><b>${fmtDate(x.from)} — ${fmtDate(x.to)}:</b> ${esc(x.name)}</li>`).join('')}</ul>
+    <details class="card">
+      <summary style="cursor:pointer;font-weight:600">🏁 Сезон · <span class="muted" style="font-weight:400">${esc(curSeason.name)}</span></summary>
+      <ul class="ul" style="margin-top:8px">${SEASON.map(x => `<li style="${t >= x.from && t <= x.to ? 'font-weight:600' : ''}"><b>${fmtDate(x.from)} — ${fmtDate(x.to)}:</b> ${esc(x.name)}</li>`).join('')}</ul>
       <div class="xs muted" style="margin-top:6px">Даты стартов 2027 ещё не объявлены — сверим, когда откроется регистрация.</div>
-    </div>
+    </details>
 
     <div class="list">
       <button class="li tap with-ic" data-go="train/library"><div class="li-ic" style="background:var(--indigo)">${icon('book')}</div><div class="li-main li-title">Библиотека упражнений</div>${icon('chev', 'chev')}</button>
@@ -245,10 +240,13 @@ function cardioSheet(id, info) {
     onRight: w => {
       const num = v => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
       const min = num(w.querySelector('#c-min').value);
-      if (!min) { toast('Укажи длительность'); return false; }
+      if (!min || !(min > 0 && min <= 600)) { toast('Укажи длительность: 1–600 мин'); return false; }
       const date = w.querySelector('#c-date').value || today();
+      if (date > today()) { toast('Дата из будущего'); return false; }
       const km = dist ? num(w.querySelector('#c-km').value) : null;
       const hr = dist ? num(w.querySelector('#c-hr').value) : null;
+      if (km !== null && !(km > 0 && km <= 200)) { toast('Проверь дистанцию'); return false; }
+      if (hr !== null && !(hr >= 40 && hr <= 230)) { toast('Пульс — от 40 до 230'); return false; }
       const id2 = store.uid();
       store.update(s => {
         s.sessions.push({ id: id2, workout: id, kind: info.kind, date, week: programWeek(date), startedAt: Date.now(), endedAt: Date.now(), durationMin: min, rpe: st.rpe, pain: w.querySelector('#c-pain').checked, note: w.querySelector('#c-note').value.trim(), run: { km, hr }, exercises: [] });

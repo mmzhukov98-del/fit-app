@@ -64,6 +64,10 @@ export function dailySheet(date = today()) {
       const per = q('d-period') ? q('d-period').checked : false;
       const cheat = q('d-cheat').checked;
       if (cheat && !d.cheat && cheatUsed(date)) { toast('Свободный ужин в этом месяце уже был'); return false; }
+      const wv = num(q('d-weight').value), sv = num(q('d-sleep').value), stv = num(q('d-steps').value);
+      if (wv !== null && !(wv >= 30 && wv <= 200)) { toast('Вес: проверь значение'); return false; }
+      if (sv !== null && !(sv >= 0 && sv <= 20)) { toast('Сон: от 0 до 20 часов'); return false; }
+      if (stv !== null && !(stv >= 0 && stv <= 100000)) { toast('Шаги: проверь значение'); return false; }
       store.update(s => {
         s.daily[date] = {
           ...(s.daily[date] || {}), ...d,
@@ -113,6 +117,7 @@ export function measureSheet(date = today()) {
       let any = false;
       for (const f of fields) {
         const v = num(w.querySelector('#m-' + f.id).value);
+        if (v !== null && !(v >= 10 && v <= 250)) { toast(`${f.name}: проверь значение (10–250 см)`); return false; }
         if (v !== null) { any = true; if (['waist', 'chest', 'hips'].includes(f.id)) rec[f.id] = v; else rec.extra[f.id] = v; }
       }
       if (!any) { toast('Введи хотя бы один показатель'); return false; }
@@ -151,8 +156,12 @@ export function activitySheet(date = today(), existing = null) {
     },
     onRight: w => {
       const min = num(w.querySelector('#a-min').value);
-      if (!min || min <= 0) { toast('Укажи длительность'); return false; }
-      const rec = { id: existing ? existing.id : store.uid(), date: w.querySelector('#a-date').value || date, type: a.type, min, rpe: a.rpe, km: num(w.querySelector('#a-km').value) };
+      if (!min || !(min > 0 && min <= 600)) { toast('Укажи длительность: 1–600 мин'); return false; }
+      const km = num(w.querySelector('#a-km').value);
+      if (km !== null && !(km > 0 && km <= 200)) { toast('Проверь дистанцию'); return false; }
+      const aDate = w.querySelector('#a-date').value || date;
+      if (aDate > today()) { toast('Дата из будущего'); return false; }
+      const rec = { id: existing ? existing.id : store.uid(), date: aDate, type: a.type, min, rpe: a.rpe, km };
       store.update(s => { s.activities = s.activities.filter(x => x.id !== rec.id); s.activities.push(rec); });
       toast('Сохранено');
     }
@@ -243,6 +252,7 @@ export function entrySheet(date, slot, entry = null) {
     onRight: w => {
       e.name = w.querySelector('#en-name').value.trim() || (e.items[0] ? e.items[0].name : 'Приём пищи');
       if (!e.items.length) { toast('Добавь хотя бы один продукт'); return false; }
+      if (e.items.some(it => !(it.g > 0 && it.g <= 3000))) { toast('Проверь граммы: от 1 до 3000'); return false; }
       saveEntry(date, slot, e);
       toast('Записано');
     }
@@ -280,6 +290,8 @@ function customFoodSheet(date, slot, entryDraft) {
       const name = w.querySelector('#cf-name').value.trim();
       const k = num(w.querySelector('#cf-k').value);
       if (!name || k === null) { toast('Нужны название и калории'); return false; }
+      if (!(k >= 0 && k <= 900)) { toast('Калорийность на 100 г — от 0 до 900'); return false; }
+      if (['#cf-p', '#cf-f', '#cf-c'].some(sel => { const x = num(w.querySelector(sel).value); return x !== null && !(x >= 0 && x <= 100); })) { toast('Б/Ж/У на 100 г — от 0 до 100'); return false; }
       const f = { name, kcal: k, p: num(w.querySelector('#cf-p').value) || 0, f: num(w.querySelector('#cf-f').value) || 0, c: num(w.querySelector('#cf-c').value) || 0, fib: 0 };
       const id = 'u' + Date.now().toString(36);
       store.update(s => { s.customFoods[id] = f; }, { silent: true });

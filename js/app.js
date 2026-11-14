@@ -7,6 +7,7 @@ import { trainRoutes } from './views/train.js';
 import { foodRoutes } from './views/food.js';
 import { profileRoutes } from './views/profile.js';
 import { WORKOUTS, useProgram } from './data/program.js';
+import { morphInner, trackListeners } from './morph.js';
 import './data/exercises-him.js';
 
 store.load();
@@ -26,6 +27,7 @@ const ROUTES = [...homeRoutes, ...calendarRoutes, ...trainRoutes, ...foodRoutes,
 const appEl = document.getElementById('app');
 const tabbar = document.getElementById('tabbar');
 const lastPathPerTab = {};
+const scrollMemo = {};
 let currentPath = null;
 let prevDepth = 0;
 let current = null;
@@ -60,7 +62,7 @@ function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 function renderTabbar(tab) {
-  tabbar.innerHTML = TABS.map(t => `<button class="tab ${t.id === tab ? 'active' : ''}" data-tab="${t.id}" aria-label="${t.label}">${icon(t.icon)}<span>${t.label}</span></button>`).join('');
+  morphInner(tabbar, TABS.map(t => `<button class="tab ${t.id === tab ? 'active' : ''}" data-tab="${t.id}" aria-label="${t.label}">${icon(t.icon)}<span>${t.label}</span></button>`).join(''));
 }
 tabbar.addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
@@ -81,11 +83,15 @@ function render(opts = {}) {
   const depth = path.split('/').length;
   const sameRoute = path === currentPath;
   const anim = opts.keep || sameRoute ? '' : depth > prevDepth ? 'view-enter' : depth < prevDepth ? 'view-back' : 'view-fade';
-  const scrollY = sameRoute ? appEl.scrollTop : 0;
+  // Прокрутка: уходя с экрана, запоминаем место; возвращаясь назад или на другую вкладку —
+  // восстанавливаем. Новый (более глубокий) экран открывается сверху.
+  if (currentPath && !sameRoute) scrollMemo[currentPath] = appEl.scrollTop;
+  const scrollY = sameRoute ? appEl.scrollTop : depth > prevDepth ? 0 : (scrollMemo[path] || 0);
   prevDepth = depth;
   currentPath = path;
 
   if (current && current.unmount) try { current.unmount(); } catch (e) { console.error(e); }
+  if (current && current._off) current._off();
   let v;
   try { v = m.route.view(...m.args, m.params); }
   catch (e) { console.error(e); v = errorView(e, path); }
@@ -93,16 +99,19 @@ function render(opts = {}) {
   const backBtn = v.back ? `<button class="nb-back" data-nav-back="${esc(v.back)}">${icon('back')}<span>${esc(v.backLabel || 'Назад')}</span></button>` : '<span></span>';
   const right = v.right || '<span></span>';
   const large = v.large !== false;
-  appEl.innerHTML = `
-    <header class="navbar ${large ? '' : 'solid'}" id="navbar">${backBtn}<div class="nb-title">${esc(v.title)}</div><div class="nb-right">${right}</div></header>
+  const html = `
+    <header class="navbar ${large ? '' : 'solid'}${sameRoute && appEl.scrollTop > 30 ? ' scrolled' : ''}" id="navbar">${backBtn}<div class="nb-title">${esc(v.title)}</div><div class="nb-right">${right}</div></header>
     <main class="${anim}" id="view">
       ${large ? `<div class="large-title">${v.eyebrow ? `<div class="eyebrow">${esc(v.eyebrow)}</div>` : ''}<h1>${esc(v.title)}</h1>${v.sub ? `<div class="sub">${v.sub}</div>` : ''}</div>` : ''}
       ${v.html}
     </main>`;
+  // тот же экран после изменения данных — обновляем на месте, без мигания
+  if (sameRoute && document.getElementById('view')) morphInner(appEl, html);
+  else appEl.innerHTML = html;
   renderTabbar(tab);
   renderLivePill(tab, path);
-  if (v.mount) try { v.mount(document.getElementById('view')); } catch (e) { console.error(e); }
-  appEl.scrollTop = scrollY;
+  if (v.mount) v._off = trackListeners(() => { try { v.mount(document.getElementById('view')); } catch (e) { console.error(e); } });
+  if (appEl.scrollTop !== scrollY) appEl.scrollTop = scrollY;
   onScroll();
 }
 

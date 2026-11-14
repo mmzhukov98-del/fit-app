@@ -27,7 +27,7 @@ function Home() {
     ? sched.find(p => !sessionsOn(t).some(x => x.workout === p.k))
     : (sched.length && !sessionsOn(t).some(x => (x.kind || 'strength') === 'strength') ? { k: nextW } : null);
   const planned = s.planned[t] || (todaysPending ? todaysPending.k : (MODE === 'weekly' && !sched.length && programInfo(t).week >= 1 ? 'rest' : null));
-  const load = dayLoad(t);
+
   const d = s.daily[t] || {};
   const yesterdayShift = (s.daily[addDays(t, -1)] || {}).shift;
   const reminders = dueReminders();
@@ -89,7 +89,6 @@ function Home() {
           <button data-go="food" style="text-align:left"><div class="lbl small muted">Вода</div><div class="v num" style="color:var(--c-water);font-weight:700;font-size:19px">${fmt(water / 1000, 2)}<small style="color:var(--label-2);font-size:13px;font-weight:500">/${fmt(tg.waterMl / 1000, 1)} л</small></div></button>
         </div>
       </div>
-      <div class="xs muted" style="margin-top:10px">Активность = тренировки и кардио + шаги (1000 шагов ≈ 10 мин). Цель: 45 мин в день тренировки, 30 — в остальные.</div>
       ${tg.reasons.length ? `<div class="chips" style="margin-top:12px">${tg.reasons.map(r => `<span class="chip on">${esc(r)}</span>`).join('')}</div>` : ''}
     </div>
 
@@ -100,23 +99,6 @@ function Home() {
           <div class="li-ic" style="background:${i.bg}">${i.ic}</div>
           <div class="li-main"><div class="li-title" style="font-size:16px;font-weight:500">${esc(i.title)}</div><div class="li-sub">${esc(i.sub)}</div></div>
           <span class="check ${i.done ? 'on' : ''}">${i.done ? icon('check') : ''}</span></button>`).join('')}
-      </div>
-    </div>
-
-    ${!doneTraining.length && !s.active && !d.shift && planned !== 'rest' ? `<button class="btn" data-go="train/w/${nextKey}">${icon('play')} Начать: ${label(nextKey)}</button>` : ''}
-
-    <div class="grid2">
-      <div class="card tap" data-go="profile/load">
-        <div class="card-h"><span class="ic" style="background:var(--orange)">${icon('bolt')}</span>Нагрузка</div>
-        <div class="mid-num">${esc(load.label)}</div>
-        <div class="muted small" style="margin-top:2px">${load.total ? `${fmt(load.total)} усл. ед. · ${load.minutes} мин` : load.shift ? 'Сутки на работе' : 'Без тренировок'}</div>
-        <div style="margin-top:10px">${bar(load.level, 4, 'var(--orange)')}</div>
-      </div>
-      <div class="card tap" data-act="steps">
-        <div class="card-h"><span class="ic" style="background:var(--blue)">${icon('steps')}</span>Шаги</div>
-        <div class="mid-num">${d.steps ? fmt(d.steps) : '—'}</div>
-        <div class="muted small" style="margin-top:2px">цель ${fmt(s.targets.steps)}</div>
-        <div style="margin-top:10px">${bar(d.steps || 0, s.targets.steps, 'var(--blue)')}</div>
       </div>
     </div>
 
@@ -156,9 +138,9 @@ function Home() {
       </div>
     </div>
 
-    <div class="grid2">
-      <button class="card tap" data-act="weigh" style="text-align:left"><div class="card-h"><span class="ic" style="background:var(--c-weigh)">${icon('scale')}</span>Вес</div><div class="mid-num">${d.weight ? fmt(d.weight, 1) + ' кг' : 'Внести'}</div></button>
-      <button class="card tap" data-act="activity" style="text-align:left"><div class="card-h"><span class="ic" style="background:var(--c-cardio)">${icon('run')}</span>Кардио</div><div class="mid-num">Добавить</div></button>
+    <div class="quick-row">
+      <button class="btn gray small" data-act="weigh">${icon('scale')} ${d.weight ? fmt(d.weight, 1) + ' кг' : 'Вес'}</button>
+      <button class="btn gray small" data-act="activity">${icon('run')} Кардио</button>
     </div>
 
     <div class="note" style="text-align:center">${pi.notStarted ? `Программа начнётся ${fmtDate(s.settings.programStart)}` : pi.done ? `Программа на ${TOTAL_WEEKS} недель завершена — сделай замеры и отправь отчёт Claude для следующего цикла` : `Неделя ${pi.week} из ${TOTAL_WEEKS} · ${esc(pi.phase.name)} · запас повторов ${esc(pi.phase.rir)}`}</div>

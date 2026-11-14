@@ -309,7 +309,7 @@ h1, h2, h3, p { margin: 0; }
 .macro .row { gap: 6px; margin-bottom: 5px; }
 .macro b { font-weight: 600; font-size: 15px; }
 .rings { position: relative; flex: none; }
-.rings svg circle { transition: stroke-dashoffset 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.rings svg circle { transition: stroke-dashoffset 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s; }
 .rings .center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
 .legend { display: grid; gap: 8px; }
 .legend .lg { display: flex; align-items: baseline; gap: 8px; }
@@ -564,3 +564,11 @@ details > summary::after { content: ""; }
 .live-pill { text-align: left; color: var(--label); }
 body.has-pill #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 96px); }
 
+
+/* --- плавность и разгрузка (14.11) --- */
+button, a, .tap, input, label { touch-action: manipulation; }
+.quick-row { display: flex; gap: 10px; }
+.quick-row .btn { flex: 1; }
+.check.on { animation: check-pop 0.28s cubic-bezier(0.3, 0.7, 0.4, 1.4); }
+@keyframes check-pop { 0% { transform: scale(0.7); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .check.on { animation: none; } .bar > i, .rings svg circle { transition: none; } }

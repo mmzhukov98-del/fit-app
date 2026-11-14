@@ -308,6 +308,8 @@ function EditView() {
     right: `<button class="nb-btn strong" id="p-save">Готово</button>`,
     mount: root => document.getElementById('p-save').addEventListener('click', () => {
       const v = id => document.getElementById('p-' + id).value.trim();
+      const nAge = +v('age'), nH = +v('height'), nW = +v('startWeight').replace(',', '.');
+      if ((v('age') && !(nAge >= 10 && nAge <= 100)) || (v('height') && !(nH >= 120 && nH <= 230)) || (v('startWeight') && !(nW >= 30 && nW <= 250))) { toast('Проверь возраст, рост или вес'); return; }
       store.update(st => { Object.assign(st.profile, { name: v('name'), age: +v('age') || st.profile.age, height: +v('height') || st.profile.height, startWeight: +v('startWeight').replace(',', '.') || st.profile.startWeight, targetWeight: v('targetWeight'), targetWaist: +v('targetWaist').replace(',', '.') || st.profile.targetWaist, deadline: v('deadline'), level: v('level'), goalText: v('goalText'), experience: v('experience'), health: v('health'), food: v('food'), work: v('work') }); }, { silent: true });
       toast('Сохранено'); go('profile', { replace: true });
     })
@@ -353,6 +355,9 @@ function TargetsView() {
       const v = id => parseFloat(document.getElementById('t-' + id).value.replace(',', '.'));
       const n = { kcal: v('kcal'), protein: v('protein'), fat: v('fat'), shiftExtra: v('shiftExtra'), lutealExtra: v('lutealExtra'), fiber: v('fiber'), waterMl: v('waterMl'), steps: v('steps'), workoutsPerWeek: v('workoutsPerWeek') };
       if (Object.values(n).some(x => Number.isNaN(x))) { toast('Проверь значения'); return; }
+      const LIM = { kcal: [1000, 5000], protein: [30, 300], fat: [20, 200], shiftExtra: [0, 1000], lutealExtra: [0, 1000], fiber: [0, 80], waterMl: [500, 6000], steps: [0, 40000], workoutsPerWeek: [1, 14] };
+      const badK = Object.keys(LIM).find(k => n[k] < LIM[k][0] || n[k] > LIM[k][1]);
+      if (badK) { toast(`Проверь значение: допустимо ${LIM[badK][0]}–${LIM[badK][1]}`); return; }
       if (n.kcal < bmr && !(await confirmDialog('Калорийность ниже базового обмена', 'Такой дефицит может вредить гормонам, циклу и мышцам. Сохранить всё равно?', 'Сохранить', true))) return;
       store.update(st => { Object.assign(st.targets, n); }, { silent: true });
       toast('Цели сохранены'); go('profile', { replace: true });

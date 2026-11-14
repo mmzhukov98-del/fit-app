@@ -4,7 +4,7 @@
 const CACHE = 'fitapp-v7';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
-  './js/app.js', './js/store.js', './js/logic.js', './js/ui.js', './js/duel.js', './js/gender.js', './js/xlsx.js', './js/export-xlsx.js',
+  './js/app.js', './js/store.js', './js/logic.js', './js/ui.js', './js/duel.js', './js/gender.js', './js/morph.js', './js/xlsx.js', './js/export-xlsx.js',
   './js/data/exercises.js', './js/data/exercises-him.js', './js/data/program.js', './js/data/foods.js', './js/data/plan-meta.js',
   './js/views/home.js', './js/views/calendar.js', './js/views/train.js', './js/views/food.js', './js/views/profile.js', './js/views/sheets.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'

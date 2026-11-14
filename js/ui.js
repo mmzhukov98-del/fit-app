@@ -65,12 +65,11 @@ export function rings(list, size = 120, stroke = 13, gap = 3, center = '') {
     const len = 2 * Math.PI * rad;
     const frac = r.max > 0 ? Math.min(r.v / r.max, 1) : 0;
     html += `<circle cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${r.color}" stroke-opacity="0.2" stroke-width="${stroke}"/>`;
-    if (frac > 0) html += `<circle cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${r.color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len}" stroke-dashoffset="${len * (1 - frac)}"/>`;
-    if (r.v > r.max && r.max > 0) {
-      // перевыполнение — второй круг поверх
-      const over = Math.min((r.v - r.max) / r.max, 1);
-      html += `<circle cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${r.color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len}" stroke-dashoffset="${len * (1 - over)}" style="filter:brightness(0.8)"/>`;
-    }
+    // круг прогресса есть всегда (при нуле — прозрачный), чтобы при изменении он плавно дорастал
+    html += `<circle cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${r.color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len}" stroke-dashoffset="${len * (1 - frac)}" style="opacity:${frac > 0 ? 1 : 0}"/>`;
+    // перевыполнение — второй круг поверх (тоже всегда в разметке)
+    const over = r.max > 0 && r.v > r.max ? Math.min((r.v - r.max) / r.max, 1) : 0;
+    html += `<circle cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${r.color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len}" stroke-dashoffset="${len * (1 - over)}" style="filter:brightness(0.8);opacity:${over > 0 ? 1 : 0}"/>`;
   });
   html += `</svg>${center ? `<div class="center">${center}</div>` : ''}</div>`;
   return html;

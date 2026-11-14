@@ -34,7 +34,7 @@ export function buildSystemXlsx() {
     const slots = [...SLOTS.map(sl => [sl.name, d[sl.id] || []]), ['Перекус (он)', ['m_snack']]];
     for (const [sn, ids] of slots) for (const id of ids) {
       const a = recipeTotals(id, 1), b = recipeTotals(id, HIM_PORTION), only = RECIPES[id].himOnly;
-      menu.push([i + 1, sn, RECIPES[id].name, only ? '' : r0(a.kcal), only ? '' : r0(a.p), only ? '' : r0(a.f), only ? '' : r0(a.c), r0(b.kcal), r0(b.p), r0(b.f), r0(b.c)]);
+      menu.push([['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][i], sn, RECIPES[id].name, only ? '' : r0(a.kcal), only ? '' : r0(a.p), only ? '' : r0(a.f), only ? '' : r0(a.c), r0(b.kcal), r0(b.p), r0(b.f), r0(b.c)]);
     }
   });
   sheets['Меню 7 дней'] = menu;
@@ -42,7 +42,7 @@ export function buildSystemXlsx() {
   for (const [id, r] of Object.entries(RECIPES)) r.ing.forEach(([fid, g], j) => rec.push([j ? '' : r.name, FOODS[fid].name, r.himOnly ? '' : portionGrams(id, g, 1), portionGrams(id, g, HIM_PORTION), j ? '' : r.time, j ? '' : r.steps.join(' ')]));
   sheets['Рецепты'] = rec;
   const foods = [['Продукт', 'Ккал/100 г', 'Б', 'Ж', 'У', 'Клетчатка', 'Готовый = сырой ×', '₽/кг', 'Источник цены', 'Как выбрать']];
-  for (const [id, f] of Object.entries(FOODS)) foods.push([f.name, f.kcal, f.p, f.f, f.c, f.fib || 0, f.yield || 1, (s.prices || {})[id] || f.price, (s.prices || {})[id] ? 'моя цена' : PRICE_SRC[id] ? 'Магнит, Ставрополь: ' + PRICE_SRC[id] : 'не проверено', PICK[id] || '']);
+  for (const [id, f] of Object.entries(FOODS)) foods.push([f.name, f.kcal, f.p, f.f, f.c, f.fib || 0, f.yield || 1, (s.prices || {})[id] || f.price || '', (s.prices || {})[id] ? 'моя цена' : PRICE_SRC[id] ? 'Магнит, Ставрополь: ' + PRICE_SRC[id] : f.price ? 'не проверено' : 'цена не указана', PICK[id] || '']);
   sheets['Продукты и цены'] = foods;
   // записи этого телефона
   const log = [['Дата', 'Сессия', 'Тип', 'Упражнение / бег', 'Подход', 'Вес, кг', 'Повторы', 'Км', 'Мин', 'Пульс', 'RPE', 'Боль', 'Комментарий']];

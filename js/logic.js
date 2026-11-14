@@ -269,7 +269,8 @@ export function extrasBetween(from, to) {
 export function slotFact(date, slot) { return sumM(((dayLog(date).slots || {})[slot] || []).map(entryTotals)); }
 export function hasFood(date) { const log = dayLog(date); return Object.values(log.slots || {}).some(a => a.length); }
 
-export function menuIndex(date) { return mod(diffDays(get().settings.programStart, date), 7); }
+// Меню привязано к дням недели: 0 = понедельник … 6 = воскресенье (готовки — в Вс и Ср)
+export function menuIndex(date) { return (parse(date).getDay() + 6) % 7; }
 export function planForDate(date) {
   const base = WEEK_MENU[menuIndex(date)];
   const swaps = (dayLog(date).swaps) || {};
